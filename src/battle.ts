@@ -33,6 +33,9 @@ export interface CombatUnit {
   berserkBonus: number; // 狂戦士: HP半分以下時の攻撃力倍率ボーナス
   undeadBonus: number; // 死霊: キルごとの攻撃力上昇率
   manaGainMult: number; // 精霊: マナ獲得倍率
+  poisonTicks: number; // 毒の残りtick
+  poisonPerHit: number; // 毒の1回あたりダメージ（10tickごと）
+  stunTicks: number; // スタンの残りtick
   alive: boolean;
   atkCd: number;
   moveCd: number;
@@ -44,7 +47,7 @@ export interface FloatText {
   x: number;
   y: number;
   text: string;
-  cls: "dmg" | "crit" | "magic" | "heal" | "cast";
+  cls: "dmg" | "crit" | "magic" | "heal" | "cast" | "poison";
 }
 
 export type SkillFx = "fire" | "ice" | "holy" | "shadow" | "arrow" | "phys" | "bolt";
@@ -145,20 +148,23 @@ export class Battle {
         berserkBonus: 0,
         undeadBonus: 0,
         manaGainMult: 1,
+        poisonTicks: 0,
+        poisonPerHit: 0,
+        stunTicks: 0,
         alive: true,
         atkCd: 0,
         moveCd: 0,
         slowTicks: 0,
         targetUid: null,
       };
-      // シナジー適用
-      if (def.traits.includes("warrior")) cu.armor += [0, 20, 45][tierOf("warrior")];
-      if (def.traits.includes("ranger")) cu.atkSpeed *= 1 + [0, 0.25, 0.6][tierOf("ranger")];
-      if (def.traits.includes("mage")) cu.spellPower += [0, 35, 80][tierOf("mage")];
-      if (def.traits.includes("assassin")) cu.critChance += [0, 0.3, 0.6][tierOf("assassin")];
-      if (def.traits.includes("berserker")) cu.berserkBonus = [0, 0.5, 0.9][tierOf("berserker")];
-      if (def.traits.includes("undead")) cu.undeadBonus = [0, 0.1, 0.18][tierOf("undead")];
-      if (def.traits.includes("spirit")) cu.manaGainMult = 1 + [0, 0.3, 0.6][tierOf("spirit")];
+      // シナジー適用（3段階）
+      if (def.traits.includes("warrior")) cu.armor += [0, 20, 45, 80][tierOf("warrior")];
+      if (def.traits.includes("ranger")) cu.atkSpeed *= 1 + [0, 0.25, 0.6, 1.1][tierOf("ranger")];
+      if (def.traits.includes("mage")) cu.spellPower += [0, 35, 80, 150][tierOf("mage")];
+      if (def.traits.includes("assassin")) cu.critChance += [0, 0.3, 0.6, 1.0][tierOf("assassin")];
+      if (def.traits.includes("berserker")) cu.berserkBonus = [0, 0.5, 0.9, 1.4][tierOf("berserker")];
+      if (def.traits.includes("undead")) cu.undeadBonus = [0, 0.1, 0.18, 0.3][tierOf("undead")];
+      if (def.traits.includes("spirit")) cu.manaGainMult = 1 + [0, 0.3, 0.6, 1.0][tierOf("spirit")];
       // 装備アイテム
       switch (u.item) {
         case "sword": cu.atk = Math.round(cu.atk * 1.3); break;
@@ -200,11 +206,11 @@ export class Battle {
     // 守護者: 味方全員にシールド
     const gTier = tierOf("guardian");
     if (gTier > 0) {
-      const pct = [0, 0.12, 0.25][gTier];
+      const pct = [0, 0.12, 0.25, 0.45][gTier];
       for (const cu of this.units) cu.shield += Math.round(cu.maxHp * pct);
     }
     // 僧侶: 味方全体リジェネ（毎秒、最大HP比）
-    this.allyRegen = [0, 0.01, 0.02][tierOf("priest")];
+    this.allyRegen = [0, 0.01, 0.02, 0.035][tierOf("priest")];
 
     const { spawns, scale } = team;
     // アセンション + 幕の掟による敵強化
@@ -237,6 +243,9 @@ export class Battle {
         berserkBonus: 0,
         undeadBonus: 0,
         manaGainMult: 1,
+        poisonTicks: 0,
+        poisonPerHit: 0,
+        stunTicks: 0,
         alive: true,
         atkCd: 0,
         moveCd: 0,
@@ -280,6 +289,17 @@ export class Battle {
     }
     for (const u of this.units) {
       if (!u.alive) continue;
+      // 毒: 10tickごと（毎秒）にダメージ
+      if (u.poisonTicks > 0) {
+        u.poisonTicks--;
+        if (u.poisonTicks % 10 === 0) this.applyPoison(u);
+        if (!u.alive) continue;
+      }
+      // スタン: 行動不能（クールダウンも進まない）
+      if (u.stunTicks > 0) {
+        u.stunTicks--;
+        continue;
+      }
       if (u.slowTicks > 0) u.slowTicks--;
       if (u.atkCd > 0) u.atkCd--;
       if (u.moveCd > 0) u.moveCd--;
@@ -299,6 +319,23 @@ export class Battle {
         this.stepToward(u, target);
         u.moveCd = MOVE_CD;
       }
+    }
+  }
+
+  private applyPoison(u: CombatUnit) {
+    let remain = u.poisonPerHit;
+    if (u.shield > 0) {
+      const absorbed = Math.min(u.shield, remain);
+      u.shield -= absorbed;
+      remain -= absorbed;
+    }
+    u.hp -= remain;
+    this.floats.push({ x: u.x, y: u.y, text: String(u.poisonPerHit), cls: "poison" });
+    if (u.hp <= 0) {
+      u.hp = 0;
+      u.alive = false;
+      u.poisonTicks = 0;
+      this.events.push({ type: "death", uid: u.uid });
     }
   }
 
@@ -469,6 +506,43 @@ export class Battle {
         this.floats.push({ x: u.x, y: u.y, text: `🛡+${Math.round(base)}`, cls: "heal" });
         this.events.push({ type: "buff", uid: u.uid, fx: "shield" });
         break;
+      case "poison": {
+        // 4秒かけて base の合計ダメージ（防御無視）
+        target.poisonTicks = 40;
+        target.poisonPerHit = Math.max(1, Math.round(base / 4));
+        this.floats.push({ x: target.x, y: target.y, text: "☠毒", cls: "poison" });
+        this.events.push({ type: "skillshot", fromUid: u.uid, toX: target.x, toY: target.y, fx: "shadow" });
+        break;
+      }
+      case "stun": {
+        this.events.push({ type: "slash", x: target.x, y: target.y });
+        this.dealDamage(u, target, base, kind, false);
+        if (target.alive) {
+          target.stunTicks = 15;
+          this.floats.push({ x: target.x, y: target.y, text: "💫", cls: "cast" });
+        }
+        break;
+      }
+      case "drain": {
+        this.events.push({ type: "skillshot", fromUid: u.uid, toX: target.x, toY: target.y, fx: sk.fx ?? "shadow" });
+        const dealt = this.dealDamage(u, target, base, kind, false);
+        if (dealt > 0) {
+          u.hp = Math.min(u.maxHp, u.hp + dealt);
+          this.floats.push({ x: u.x, y: u.y, text: `+${dealt}`, cls: "heal" });
+        }
+        break;
+      }
+      case "warcry": {
+        const pct = base / 100;
+        for (const a of this.units) {
+          if (a.alive && a.side === u.side) {
+            a.atk = Math.round(a.atk * (1 + pct));
+            this.events.push({ type: "buff", uid: a.uid, fx: "heal" });
+          }
+        }
+        this.floats.push({ x: u.x, y: u.y, text: `⚔攻撃+${Math.round(base)}%`, cls: "cast" });
+        break;
+      }
     }
   }
 

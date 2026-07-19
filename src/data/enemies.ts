@@ -82,13 +82,13 @@ export interface EnemyTeam {
 }
 
 /** 幕ごとの基礎難易度倍率 */
-const ACT_MULT: Record<number, number> = { 1: 0.9, 2: 1.7, 3: 2.5 };
+const ACT_MULT: Record<number, number> = { 1: 1.0, 2: 2.1, 3: 3.6 };
 
 const pickOne = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
 
 /** 幕・フロア・ノード種別に応じた敵編成を返す */
 export function enemyTeamFor(act: number, floor: number, type: "battle" | "elite" | "boss"): EnemyTeam {
-  const scale = (ACT_MULT[act] ?? 1) * (1 + floor * 0.1 + (type === "elite" ? 0.18 : 0));
+  const scale = (ACT_MULT[act] ?? 1) * (1 + floor * 0.13 + (type === "elite" ? 0.25 : 0));
   const N = ENEMIES;
 
   if (type === "boss") {

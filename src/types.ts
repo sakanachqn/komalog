@@ -17,7 +17,11 @@ export type SkillType =
   | "multishot" // ランダムな敵複数に攻撃
   | "execute" // 最もHPの低い敵に大ダメージ
   | "pierce" // 対象とその後方に物理ダメージ
-  | "frost"; // 対象周辺にダメージ+攻撃速度低下
+  | "frost" // 対象周辺にダメージ+攻撃速度低下
+  | "poison" // 対象に毒（時間経過ダメージ）
+  | "stun" // 対象にダメージ+行動不能
+  | "drain" // 対象にダメージ+与ダメ分を自己回復
+  | "warcry"; // 味方全体の攻撃力を強化
 
 export interface SkillDef {
   name: string;

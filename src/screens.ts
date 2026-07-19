@@ -19,6 +19,7 @@ import {
   benchUnits,
   boardUnits,
   globalFloor,
+  maxedDefIds,
   newRun,
   sellUnit,
   starMult,
@@ -103,6 +104,39 @@ function makeBoard(): { wrap: HTMLElement; board: HTMLElement; cells: HTMLElemen
   }
   wrap.appendChild(board);
   return { wrap, board, cells };
+}
+
+/** 手持ちの一覧（盤面・ベンチ・アイテム）を読み取り専用で表示 */
+function rosterStrip(run: RunState): HTMLElement {
+  const wrap = el("div", "roster-strip");
+  const section = (label: string, units: OwnedUnit[]) => {
+    const box = el("span", "rs-section");
+    box.appendChild(el("span", "rs-label", label));
+    if (units.length === 0) box.appendChild(el("span", "rs-empty", "—"));
+    for (const u of units) {
+      const d = unitDef(u);
+      const chip = el("span", "rs-chip");
+      chip.append(el("span", "", d.icon), el("sup", "rs-star", "★".repeat(u.star)));
+      if (u.item) chip.appendChild(el("span", "rs-item", ITEM_BY_ID.get(u.item)!.icon));
+      chip.title = `${d.name} ${"★".repeat(u.star)}${u.item ? ` / ${ITEM_BY_ID.get(u.item)!.name}` : ""}\n${d.traits.map((t) => TRAITS[t].icon + TRAITS[t].name).join(" ")}`;
+      box.appendChild(chip);
+    }
+    return box;
+  };
+  wrap.appendChild(section("盤面", boardUnits(run)));
+  wrap.appendChild(section("ベンチ", benchUnits(run)));
+  if (run.items.length > 0) {
+    const box = el("span", "rs-section");
+    box.appendChild(el("span", "rs-label", "🎒"));
+    for (const id of run.items) {
+      const d = ITEM_BY_ID.get(id)!;
+      const chip = el("span", "rs-chip", d.icon);
+      chip.title = `${d.name}: ${d.desc}`;
+      box.appendChild(chip);
+    }
+    wrap.appendChild(box);
+  }
+  return wrap;
 }
 
 function traitPanel(board: OwnedUnit[]): HTMLElement {
@@ -844,7 +878,7 @@ function unitInfoPanel(ou: OwnedUnit, onSell: () => void, onUnequip?: () => void
     ["攻撃速度", def.atkSpeed.toFixed(2)],
     ["射程", String(def.range)],
     ["防御", String(def.armor)],
-    ["特性", def.traits.map((t) => TRAITS[t].name).join(" / ")],
+    ["特性", def.traits.map((t) => `${TRAITS[t].icon}${TRAITS[t].name}`).join(" ")],
   ];
   for (const [k, v] of rows) {
     const r = el("div", "row");
@@ -935,6 +969,7 @@ export function renderBattle(node: MapNode): HTMLElement {
     e.hp.style.width = `${pct}%`;
     e.hp.classList.toggle("shielded", cu.shield > 0);
     if (e.mana) e.mana.style.width = `${Math.min(100, (cu.mana / cu.maxMana) * 100)}%`;
+    e.root.classList.toggle("stunned", cu.alive && cu.stunTicks > 0);
     if (!cu.alive && !e.root.classList.contains("dead")) {
       // 残っている演出クラスが死亡アニメーションを上書きしないよう除去
       e.root.classList.remove("lunge", "casting", "hit-flash");
@@ -1170,11 +1205,11 @@ export function renderBattle(node: MapNode): HTMLElement {
 
 function goldReward(node: MapNode): number {
   const run = ctx.run!;
-  const base = node.type === "elite" ? 18 + node.floor * 2 : 10 + node.floor * 2;
-  // 通常/エリート戦の基礎報酬を3割減（序盤のゴールド過多を抑制）
-  const scaled = Math.round((base + (run.act - 1) * 4) * 0.7);
+  // 幕が進んでもインフレしすぎないよう控えめのカーブ
+  const base = node.type === "elite" ? 16 + node.floor : 8 + node.floor;
   return (
-    scaled +
+    base +
+    (run.act - 1) * 3 +
     (run.relics.includes("goldenEgg") ? 4 : 0) +
     ascMods(run.asc).winGold +
     (ACT_RULE_BY_ID.get(run.actRule)?.e.winGold ?? 0)
@@ -1245,8 +1280,14 @@ export function renderResult(node: MapNode, win: boolean, hpLost: number): HTMLE
   }
 
   s.appendChild(el("div", "sub", `💰 ${goldReward(node)}G を獲得！ 仲間を1体選ぼう：`));
+  s.appendChild(rosterStrip(run));
   const gf = globalFloor(run);
-  const choices: UnitDef[] = [rollUnitDef(gf), rollUnitDef(gf), rollUnitDef(gf)];
+  const maxed = maxedDefIds(run);
+  const choices: UnitDef[] = [
+    rollUnitDef(gf, maxed),
+    rollUnitDef(gf, maxed),
+    rollUnitDef(gf, maxed),
+  ];
   const row = el("div", "card-row");
   const msg = el("div", "sub", "");
   for (const def of choices) {
@@ -1306,6 +1347,9 @@ export function renderShop(_node: MapNode, rescue = false): HTMLElement {
       : "ユニットを雇入れよう（コスト分のゴールドが必要）",
   );
   center.appendChild(msg);
+  const stripHolder = el("div");
+  stripHolder.appendChild(rosterStrip(run));
+  center.appendChild(stripHolder);
 
   let offers: (UnitDef | null)[] = rollOffers();
   const itemOffers: (string | null)[] = [rollItem(), rollItem()];
@@ -1317,7 +1361,8 @@ export function renderShop(_node: MapNode, rescue = false): HTMLElement {
   const bar = el("div", "toolbar");
 
   function rollOffers(): (UnitDef | null)[] {
-    return [0, 1, 2, 3, 4].map(() => rollUnitDef(globalFloor(run)));
+    const maxed = maxedDefIds(run);
+    return [0, 1, 2, 3, 4].map(() => rollUnitDef(globalFloor(run), maxed));
   }
 
   function refresh() {
@@ -1426,6 +1471,8 @@ export function renderShop(_node: MapNode, rescue = false): HTMLElement {
 
   function rerenderAll() {
     s.replaceChild(hud(run), s.firstChild!);
+    stripHolder.innerHTML = "";
+    stripHolder.appendChild(rosterStrip(run));
     refresh();
     refreshRoster();
   }
@@ -1446,6 +1493,7 @@ export function renderRest(_node: MapNode): HTMLElement {
   const center = el("div", "center-screen");
   center.appendChild(el("h2", "", "🏕️ 休憩地点"));
   center.appendChild(el("div", "sub", "焚き火のそばで一息つこう。どちらか選べる："));
+  center.appendChild(rosterStrip(run));
 
   // 回復量: アセンションで半減、幕の掟「疫病の風」で2倍
   let healAmt = 18;
@@ -1472,11 +1520,13 @@ export function renderRest(_node: MapNode): HTMLElement {
     done(`ぐっすり眠った。HPが ${amount} 回復した！`);
   });
   train.addEventListener("click", () => {
-    if (run.roster.length === 0) {
-      done("特訓する仲間がいなかった…");
+    // ★3は複製しても無駄なので対象から除外
+    const pool = run.roster.filter((u) => u.star < 3);
+    if (pool.length === 0) {
+      done("特訓できる仲間がいなかった…（★3は既に極まっている）");
       return;
     }
-    const target = run.roster[Math.floor(Math.random() * run.roster.length)];
+    const target = pool[Math.floor(Math.random() * pool.length)];
     const def = unitDef(target);
     if (!addUnit(run, def)) {
       done("ベンチが一杯で複製を受け取れなかった…");
@@ -1529,7 +1579,7 @@ const EVENTS: GameEvent[] = [
         label: "雇う (8G)",
         effect: (run) => {
           if (run.gold < 8) return "ゴールドが足りなかった…商人は去っていった。";
-          const def = rollUnitDef(globalFloor(run) + 2);
+          const def = rollUnitDef(globalFloor(run) + 2, maxedDefIds(run));
           if (!addUnit(run, def)) return "ベンチが一杯で雇えなかった…";
           run.gold -= 8;
           return `${def.icon} ${def.name} が仲間になった！`;
@@ -1592,6 +1642,7 @@ export function renderEvent(_node: MapNode): HTMLElement {
   const center = el("div", "center-screen");
   center.appendChild(el("h2", "", `${ev.icon} ${ev.title}`));
   center.appendChild(el("div", "sub", ev.desc));
+  center.appendChild(rosterStrip(run));
   const row = el("div", "card-row");
   for (const opt of ev.options) {
     const card = el("button", "option-card");

@@ -14,64 +14,64 @@ export const TRAITS: Record<TraitId, TraitInfo> = {
     id: "warrior",
     name: "戦士",
     icon: "⚔️",
-    thresholds: [2, 4],
-    desc: (t) => `戦士の防御力 +${[0, 20, 45][t]}`,
+    thresholds: [2, 4, 6],
+    desc: (t) => `戦士の防御力 +${[0, 20, 45, 80][t]}`,
   },
   ranger: {
     id: "ranger",
     name: "射手",
     icon: "🏹",
-    thresholds: [2, 4],
-    desc: (t) => `射手の攻撃速度 +${[0, 25, 60][t]}%`,
+    thresholds: [2, 4, 6],
+    desc: (t) => `射手の攻撃速度 +${[0, 25, 60, 110][t]}%`,
   },
   mage: {
     id: "mage",
     name: "魔導士",
     icon: "🔮",
-    thresholds: [2, 4],
-    desc: (t) => `魔導士の呪文威力 +${[0, 35, 80][t]}%`,
+    thresholds: [2, 4, 6],
+    desc: (t) => `魔導士の呪文威力 +${[0, 35, 80, 150][t]}%`,
   },
   guardian: {
     id: "guardian",
     name: "守護者",
     icon: "🛡️",
-    thresholds: [2, 3],
-    desc: (t) => `味方全員が最大HPの ${[0, 12, 25][t]}% のシールドを得る`,
+    thresholds: [2, 4, 6],
+    desc: (t) => `味方全員が最大HPの ${[0, 12, 25, 45][t]}% のシールドを得る`,
   },
   assassin: {
     id: "assassin",
     name: "暗殺者",
     icon: "🗡️",
-    thresholds: [2, 4],
-    desc: (t) => `暗殺者のクリティカル率 +${[0, 30, 60][t]}%`,
+    thresholds: [2, 4, 6],
+    desc: (t) => `暗殺者のクリティカル率 +${[0, 30, 60, 100][t]}%`,
   },
   berserker: {
     id: "berserker",
     name: "狂戦士",
     icon: "🪓",
-    thresholds: [2, 3],
-    desc: (t) => `HPが半分以下のとき、狂戦士の攻撃力 +${[0, 50, 90][t]}%`,
+    thresholds: [2, 3, 4],
+    desc: (t) => `HPが半分以下のとき、狂戦士の攻撃力 +${[0, 50, 90, 140][t]}%`,
   },
   priest: {
     id: "priest",
     name: "僧侶",
     icon: "🙏",
-    thresholds: [2, 3],
-    desc: (t) => `毎秒、味方全体が最大HPの ${[0, 1, 2][t]}% 回復`,
+    thresholds: [2, 3, 4],
+    desc: (t) => `毎秒、味方全体が最大HPの ${[0, 1, 2, 3.5][t]}% 回復`,
   },
   undead: {
     id: "undead",
     name: "死霊",
     icon: "💀",
-    thresholds: [2, 3],
-    desc: (t) => `敵を倒すたび、死霊の攻撃力 +${[0, 10, 18][t]}%`,
+    thresholds: [2, 3, 4],
+    desc: (t) => `敵を倒すたび、死霊の攻撃力 +${[0, 10, 18, 30][t]}%`,
   },
   spirit: {
     id: "spirit",
     name: "精霊",
     icon: "🍃",
-    thresholds: [2, 3],
-    desc: (t) => `精霊のマナ獲得 +${[0, 30, 60][t]}%`,
+    thresholds: [2, 3, 4],
+    desc: (t) => `精霊のマナ獲得 +${[0, 30, 60, 100][t]}%`,
   },
 };
 
@@ -375,6 +375,58 @@ export const UNITS: UnitDef[] = [
     armor: 14,
     skill: { name: "天雷", desc: "対象周辺に320の魔法ダメージ", mana: 90, type: "aoe", power: 320, scaling: "spell", fx: "bolt" },
   },
+  {
+    id: "venomfang",
+    name: "毒牙",
+    icon: "🕷️",
+    cost: 2,
+    traits: ["assassin"],
+    hp: 600,
+    atk: 70,
+    atkSpeed: 1.0,
+    range: 1,
+    armor: 14,
+    skill: { name: "蝕む毒", desc: "対象に猛毒を注入し、4秒かけて合計280の魔法ダメージ", mana: 60, type: "poison", power: 280, scaling: "spell" },
+  },
+  {
+    id: "gravearcher",
+    name: "冥界の射手",
+    icon: "🪶",
+    cost: 2,
+    traits: ["undead", "ranger"],
+    hp: 550,
+    atk: 72,
+    atkSpeed: 0.9,
+    range: 3,
+    armor: 10,
+    skill: { name: "魂喰いの矢", desc: "対象に攻撃力240%のダメージ、与えたダメージ分HPを吸収", mana: 75, type: "drain", power: 240, scaling: "attack", fx: "shadow" },
+  },
+  {
+    id: "ragewall",
+    name: "憤怒の壁",
+    icon: "🧱",
+    cost: 2,
+    traits: ["berserker", "guardian"],
+    hp: 950,
+    atk: 60,
+    atkSpeed: 0.7,
+    range: 1,
+    armor: 38,
+    skill: { name: "怒髪の一撃", desc: "対象に攻撃力180%の物理ダメージ+1.5秒スタン", mana: 70, type: "stun", power: 180, scaling: "attack" },
+  },
+  {
+    id: "songmaiden",
+    name: "聖弓の巫女",
+    icon: "🌸",
+    cost: 2,
+    traits: ["priest", "ranger"],
+    hp: 520,
+    atk: 62,
+    atkSpeed: 0.85,
+    range: 3,
+    armor: 10,
+    skill: { name: "祝福の歌", desc: "味方全体の攻撃力を18%強化（重ねがけ可）", mana: 80, type: "warcry", power: 18, scaling: "spell" },
+  },
   // ===== アンロック制ユニット =====
   {
     id: "phoenix",
@@ -422,8 +474,9 @@ export const UNITS: UnitDef[] = [
 
 export const UNIT_BY_ID = new Map(UNITS.map((u) => [u.id, u]));
 
-/** 通算フロア（幕をまたいだ進行度）に応じたコスト別出現率でランダムなユニット定義を返す */
-export function rollUnitDef(floor: number): UnitDef {
+/** 通算フロア（幕をまたいだ進行度）に応じたコスト別出現率でランダムなユニット定義を返す。
+ *  exclude には出現させたくないユニットID（★3所持済みなど）を渡す */
+export function rollUnitDef(floor: number, exclude?: Set<string>): UnitDef {
   let weights: [number, number, number];
   if (floor < 3) weights = [75, 22, 3];
   else if (floor < 6) weights = [50, 38, 12];
@@ -432,6 +485,13 @@ export function rollUnitDef(floor: number): UnitDef {
   else weights = [5, 40, 55];
   const r = Math.random() * 100;
   const cost = r < weights[0] ? 1 : r < weights[0] + weights[1] ? 2 : 3;
-  const pool = UNITS.filter((u) => u.cost === cost && (!u.unlock || hasUnlock(u.unlock)));
+  let pool = UNITS.filter(
+    (u) => u.cost === cost && (!u.unlock || hasUnlock(u.unlock)) && !exclude?.has(u.id),
+  );
+  // 除外しすぎてプールが空ならコスト縛りだけ緩める
+  if (pool.length === 0) {
+    pool = UNITS.filter((u) => (!u.unlock || hasUnlock(u.unlock)) && !exclude?.has(u.id));
+  }
+  if (pool.length === 0) pool = UNITS.filter((u) => !u.unlock || hasUnlock(u.unlock));
   return pool[Math.floor(Math.random() * pool.length)];
 }
