@@ -131,5 +131,5 @@ export function autoPlace(run: RunState) {
 
 /** 星によるステータス倍率 */
 export function starMult(star: number): number {
-  return star === 1 ? 1 : star === 2 ? 1.8 : 3.2;
+  return star === 1 ? 1 : star === 2 ? 1.8 : 5.2;
 }
