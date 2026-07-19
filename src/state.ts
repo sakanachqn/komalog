@@ -1,0 +1,135 @@
+import { ascMods } from "./ascension";
+import { rollActRule } from "./data/actrules";
+import { rollItem, rollRelicChoices } from "./data/relics";
+import { UNIT_BY_ID } from "./data/units";
+import { generateMap } from "./map";
+import { grantUnlock, meta, saveMeta } from "./meta";
+import type { OwnedUnit, RunState, UnitDef } from "./types";
+
+export const BOARD_COLS = 7;
+export const BOARD_ROWS = 8; // 上4行=敵陣, 下4行=自陣
+export const BENCH_SIZE = 8;
+
+export function newRun(starterDefIds: string[], asc = 0): RunState {
+  const mods = ascMods(asc);
+  const maxHp = 50 + mods.startHp - mods.maxHpLoss;
+  const run: RunState = {
+    playerHp: maxHp,
+    playerMaxHp: maxHp,
+    gold: 10 + mods.startGold,
+    act: 1,
+    asc,
+    actRule: rollActRule(),
+    startedAt: Date.now(),
+    damageTaken: 0,
+    floorIndex: 0,
+    currentNodeId: null,
+    map: generateMap(),
+    roster: [],
+    nextIid: 1,
+    battleCount: 0,
+    relics: [],
+    items: [],
+  };
+  for (const id of starterDefIds) {
+    addUnit(run, UNIT_BY_ID.get(id)!);
+  }
+  // アセンションのバフ: 開始時アイテム・レリック
+  for (let i = 0; i < mods.startItems; i++) run.items.push(rollItem());
+  for (const r of rollRelicChoices([], mods.startRelics)) run.relics.push(r.id);
+  // 初期配置
+  autoPlace(run);
+  meta().counters.totalRuns++;
+  saveMeta();
+  return run;
+}
+
+/** 幕をまたいだ通算フロア（難易度・出現率の基準） */
+export function globalFloor(run: RunState): number {
+  return (run.act - 1) * 10 + run.floorIndex;
+}
+
+/** 盤面に同時に出せる最大数（進行で増える + 王の勲章 + 英雄の器） */
+export function teamCap(run: RunState): number {
+  const base = Math.min(8, 3 + Math.floor(globalFloor(run) / 3));
+  const crown = run.relics.includes("crown") ? 1 : 0;
+  return base + crown + ascMods(run.asc).capBonus;
+}
+
+export function boardUnits(run: RunState): OwnedUnit[] {
+  return run.roster.filter((u) => u.pos !== null);
+}
+
+export function benchUnits(run: RunState): OwnedUnit[] {
+  return run.roster.filter((u) => u.pos === null);
+}
+
+export function unitDef(u: OwnedUnit): UnitDef {
+  return UNIT_BY_ID.get(u.defId)!;
+}
+
+/** ユニットを追加し、3体揃ったら自動で星アップ。ベンチ超過なら false */
+export function addUnit(run: RunState, def: UnitDef): boolean {
+  const u: OwnedUnit = { iid: run.nextIid++, defId: def.id, star: 1, pos: null, item: null };
+  run.roster.push(u);
+  tryMerge(run, def.id);
+  if (benchUnits(run).length > BENCH_SIZE) {
+    // あふれた場合は追加を取り消す
+    run.roster = run.roster.filter((x) => x.iid !== u.iid);
+    return false;
+  }
+  return true;
+}
+
+function tryMerge(run: RunState, defId: string) {
+  for (const star of [1, 2] as const) {
+    const same = run.roster.filter((u) => u.defId === defId && u.star === star);
+    if (same.length >= 3) {
+      // 盤面にいる個体・アイテム装備個体を優先的に残す
+      same.sort(
+        (a, b) =>
+          (b.pos ? 2 : 0) + (b.item ? 1 : 0) - ((a.pos ? 2 : 0) + (a.item ? 1 : 0)),
+      );
+      const keep = same[0];
+      const remove = same.slice(1, 3);
+      // 消える個体の装備は在庫に戻す
+      for (const r of remove) if (r.item) run.items.push(r.item);
+      run.roster = run.roster.filter((u) => !remove.includes(u));
+      keep.star = (star + 1) as 2 | 3;
+      if (keep.star === 3) grantUnlock("first_star3");
+      tryMerge(run, defId);
+    }
+  }
+}
+
+export function sellUnit(run: RunState, iid: number) {
+  const u = run.roster.find((x) => x.iid === iid);
+  if (!u) return;
+  const def = unitDef(u);
+  const value = def.cost * (u.star === 1 ? 1 : u.star === 2 ? 3 : 9);
+  run.gold += value;
+  if (u.item) run.items.push(u.item); // 装備は在庫に戻す
+  run.roster = run.roster.filter((x) => x.iid !== iid);
+}
+
+/** 空いている自陣マスに未配置ユニットを詰める（チーム上限まで） */
+export function autoPlace(run: RunState) {
+  const cap = teamCap(run);
+  const cells: { x: number; y: number }[] = [];
+  for (let y = 4; y < BOARD_ROWS; y++)
+    for (let x = 0; x < BOARD_COLS; x++) cells.push({ x, y });
+  for (const u of run.roster) {
+    if (boardUnits(run).length >= cap) break;
+    if (u.pos) continue;
+    const free = cells.find(
+      (c) => !run.roster.some((o) => o.pos && o.pos.x === c.x && o.pos.y === c.y),
+    );
+    if (!free) break;
+    u.pos = { ...free };
+  }
+}
+
+/** 星によるステータス倍率 */
+export function starMult(star: number): number {
+  return star === 1 ? 1 : star === 2 ? 1.8 : 3.2;
+}
