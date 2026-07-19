@@ -82,7 +82,7 @@ export interface EnemyTeam {
 }
 
 /** 幕ごとの基礎難易度倍率 */
-const ACT_MULT: Record<number, number> = { 1: 0.9, 2: 1.45, 3: 1.7 };
+const ACT_MULT: Record<number, number> = { 1: 0.9, 2: 1.7, 3: 2.5 };
 
 const pickOne = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
 

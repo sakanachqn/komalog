@@ -1171,9 +1171,10 @@ export function renderBattle(node: MapNode): HTMLElement {
 function goldReward(node: MapNode): number {
   const run = ctx.run!;
   const base = node.type === "elite" ? 18 + node.floor * 2 : 10 + node.floor * 2;
+  // 通常/エリート戦の基礎報酬を3割減（序盤のゴールド過多を抑制）
+  const scaled = Math.round((base + (run.act - 1) * 4) * 0.7);
   return (
-    base +
-    (run.act - 1) * 4 +
+    scaled +
     (run.relics.includes("goldenEgg") ? 4 : 0) +
     ascMods(run.asc).winGold +
     (ACT_RULE_BY_ID.get(run.actRule)?.e.winGold ?? 0)
