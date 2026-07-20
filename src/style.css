@@ -921,6 +921,17 @@ button.primary:hover:not(:disabled) {
 }
 .unit-card.cost-2 { border-color: #4a7ab0; }
 .unit-card.cost-3 { border-color: #9a5ab0; }
+.unit-card.cost-4 {
+  border-color: #d08a30;
+  box-shadow: 0 0 12px rgba(208, 138, 48, 0.35);
+}
+.unit-card.cost-5 {
+  border-color: #e05555;
+  box-shadow: 0 0 16px rgba(224, 85, 85, 0.5);
+  background: linear-gradient(160deg, var(--panel), rgba(224, 85, 85, 0.12));
+}
+.unit-card.cost-4 .cost { color: #f0a850; }
+.unit-card.cost-5 .cost { color: #ff8080; }
 
 /* ショップなど1行に多数並べる場面用のコンパクト表示 */
 .card-row.compact .unit-card {

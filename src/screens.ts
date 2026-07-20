@@ -1547,7 +1547,13 @@ interface GameEvent {
   icon: string;
   title: string;
   desc: string;
-  options: { label: string; effect: (run: RunState) => string }[];
+  options: {
+    label: string;
+    // effect: 結果テキストを返すだけの単純な選択肢
+    effect?: (run: RunState) => string;
+    // custom: center を自由に描き換える選択肢（done で結果画面へ）
+    custom?: (run: RunState, center: HTMLElement, done: (text: string) => void) => void;
+  }[];
 }
 
 const EVENTS: GameEvent[] = [
@@ -1573,16 +1579,43 @@ const EVENTS: GameEvent[] = [
   {
     icon: "🧙",
     title: "旅の傭兵商人",
-    desc: "「腕利きを紹介するぜ。8Gでどうだ？」",
+    desc: "「腕利きを3人連れてきた。1人だけ、格安の6Gで譲るぜ」",
     options: [
       {
-        label: "雇う (8G)",
-        effect: (run) => {
-          if (run.gold < 8) return "ゴールドが足りなかった…商人は去っていった。";
-          const def = rollUnitDef(globalFloor(run) + 2, maxedDefIds(run));
-          if (!addUnit(run, def)) return "ベンチが一杯で雇えなかった…";
-          run.gold -= 8;
-          return `${def.icon} ${def.name} が仲間になった！`;
+        label: "品定めする (6G)",
+        custom: (run, center, done) => {
+          const PRICE = 6;
+          if (run.gold < PRICE) {
+            done("ゴールドが足りなかった…商人は肩をすくめて去っていった。");
+            return;
+          }
+          // 通常ショップより格上（通算フロア+4）のユニットを3体提示し、選んで雇える
+          const gf = globalFloor(run) + 4;
+          const maxed = maxedDefIds(run);
+          const cands = [rollUnitDef(gf, maxed), rollUnitDef(gf, maxed), rollUnitDef(gf, maxed)];
+          center.innerHTML = "";
+          center.appendChild(el("h2", "", "🧙 旅の傭兵商人"));
+          center.appendChild(el("div", "sub", `1人選んで雇おう（${PRICE}G）`));
+          const row = el("div", "card-row compact");
+          for (const def of cands) {
+            row.appendChild(
+              unitCard(def, "雇う", () => {
+                if (run.gold < PRICE) {
+                  done("ゴールドが足りない！");
+                  return;
+                }
+                if (!addUnit(run, def)) {
+                  done("ベンチが一杯で雇えなかった…");
+                  return;
+                }
+                run.gold -= PRICE;
+                sfx.coin();
+                done(`${def.icon} ${def.name} が仲間になった！`);
+              }),
+            );
+          }
+          center.appendChild(row);
+          center.appendChild(btn("やっぱりやめる", "", () => done("君は首を横に振った。商人は去っていった。")));
         },
       },
       { label: "断る", effect: () => "商人は肩をすくめて去っていった。" },
@@ -1643,17 +1676,26 @@ export function renderEvent(_node: MapNode): HTMLElement {
   center.appendChild(el("h2", "", `${ev.icon} ${ev.title}`));
   center.appendChild(el("div", "sub", ev.desc));
   center.appendChild(rosterStrip(run));
+
+  const done = (text: string) => {
+    center.innerHTML = "";
+    center.appendChild(el("h2", "", ev.icon));
+    center.appendChild(el("div", "sub", text));
+    center.appendChild(btn("マップへ戻る", "primary", () => go({ kind: "map" })));
+    s.replaceChild(hud(run), s.firstChild!);
+  };
+
   const row = el("div", "card-row");
   for (const opt of ev.options) {
     const card = el("button", "option-card");
     card.innerHTML = `<b>${opt.label}</b>`;
     card.addEventListener("click", () => {
-      const result = opt.effect(run);
-      center.innerHTML = "";
-      center.appendChild(el("h2", "", ev.icon));
-      center.appendChild(el("div", "sub", result));
-      center.appendChild(btn("マップへ戻る", "primary", () => go({ kind: "map" })));
-      s.replaceChild(hud(run), s.firstChild!);
+      if (opt.custom) {
+        opt.custom(run, center, done);
+        s.replaceChild(hud(run), s.firstChild!);
+      } else {
+        done(opt.effect!(run));
+      }
     });
     row.appendChild(card);
   }

@@ -21,7 +21,17 @@ export type SkillType =
   | "poison" // 対象に毒（時間経過ダメージ）
   | "stun" // 対象にダメージ+行動不能
   | "drain" // 対象にダメージ+与ダメ分を自己回復
-  | "warcry"; // 味方全体の攻撃力を強化
+  | "warcry" // 味方全体の攻撃力を強化
+  | "chain" // 対象から近い敵へ連鎖（減衰）
+  | "nova" // 自分中心の全周ダメージ
+  | "curse" // 対象にダメージ+防御を半減
+  | "bombard" // ランダムな複数地点に範囲爆撃
+  | "snipe" // 最もHPの高い敵に特大ダメージ
+  | "healAll" // 味方全体を回復
+  | "rally" // 味方全体にシールド
+  | "frenzy" // 自己強化（攻撃速度・クリ率）
+  | "manaburn" // 対象にダメージ+マナ枯渇
+  | "freeze"; // 対象周辺にダメージ+凍結（行動不能）
 
 export interface SkillDef {
   name: string;
@@ -38,7 +48,7 @@ export interface UnitDef {
   id: string;
   name: string;
   icon: string;
-  cost: 1 | 2 | 3;
+  cost: 1 | 2 | 3 | 4 | 5;
   traits: TraitId[];
   hp: number;
   atk: number;

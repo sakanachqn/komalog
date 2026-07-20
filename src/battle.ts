@@ -407,7 +407,10 @@ export class Battle {
     this.events.push({ type: "cast", uid: u.uid });
 
     const foes = () => this.units.filter((t) => t.alive && t.side !== u.side);
+    const allies = () => this.units.filter((t) => t.alive && t.side === u.side);
     const kind = sk.scaling === "attack" ? "physical" : "magic";
+    const cheb = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+      Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 
     switch (sk.type) {
       case "nuke":
@@ -541,6 +544,142 @@ export class Battle {
           }
         }
         this.floats.push({ x: u.x, y: u.y, text: `⚔攻撃+${Math.round(base)}%`, cls: "cast" });
+        break;
+      }
+      case "chain": {
+        // 対象から最も近い敵へ順に連鎖。1体ごとに威力減衰
+        let cur: CombatUnit | undefined = target;
+        let fromUid = u.uid;
+        let dmg = base;
+        const hit = new Set<number>();
+        for (let i = 0; i < 4 && cur; i++) {
+          hit.add(cur.uid);
+          this.events.push({
+            type: "skillshot",
+            fromUid,
+            toX: cur.x,
+            toY: cur.y,
+            fx: sk.fx ?? "bolt",
+          });
+          this.dealDamage(u, cur, dmg, kind, false);
+          fromUid = cur.uid;
+          dmg *= 0.72;
+          const prev: CombatUnit = cur;
+          const rest: CombatUnit[] = foes().filter((f) => !hit.has(f.uid));
+          rest.sort((a, b) => cheb(prev, a) - cheb(prev, b));
+          cur = rest[0];
+        }
+        break;
+      }
+      case "nova": {
+        // 自分を中心とした全周攻撃
+        this.events.push({
+          type: "aoe",
+          x: u.x,
+          y: u.y,
+          kind: sk.fx === "shadow" || sk.fx === "bolt" || sk.fx === "fire" ? sk.fx : "fire",
+        });
+        for (const t of foes()) {
+          if (cheb(t, u) <= 1) this.dealDamage(u, t, base, kind, false);
+        }
+        break;
+      }
+      case "curse": {
+        this.events.push({
+          type: "skillshot",
+          fromUid: u.uid,
+          toX: target.x,
+          toY: target.y,
+          fx: sk.fx ?? "shadow",
+        });
+        this.dealDamage(u, target, base, kind, false);
+        if (target.alive && target.armor > 0) {
+          target.armor = Math.round(target.armor / 2);
+          this.floats.push({ x: target.x, y: target.y, text: "🛡️↓", cls: "poison" });
+        }
+        break;
+      }
+      case "bombard": {
+        // ランダムな敵3体の位置へ着弾、それぞれ周囲1マスを巻き込む
+        const picks = [...foes()].sort(() => Math.random() - 0.5).slice(0, 3);
+        for (const p of picks) {
+          const px = p.x;
+          const py = p.y;
+          this.events.push({ type: "aoe", x: px, y: py, kind: sk.fx === "shadow" ? "shadow" : "fire" });
+          for (const t of foes()) {
+            if (Math.max(Math.abs(t.x - px), Math.abs(t.y - py)) <= 1) {
+              this.dealDamage(u, t, base * 0.6, kind, false);
+            }
+          }
+        }
+        break;
+      }
+      case "snipe": {
+        // 最もHPの高い敵（前衛の壁役）を撃ち抜く
+        const t = foes().sort((a, b) => b.hp - a.hp)[0] ?? target;
+        this.events.push({
+          type: "skillshot",
+          fromUid: u.uid,
+          toX: t.x,
+          toY: t.y,
+          fx: sk.fx ?? "arrow",
+        });
+        this.dealDamage(u, t, base, kind, true);
+        break;
+      }
+      case "healAll": {
+        const amount = Math.round(base);
+        for (const a of allies()) {
+          if (a.hp >= a.maxHp) continue;
+          a.hp = Math.min(a.maxHp, a.hp + amount);
+          this.floats.push({ x: a.x, y: a.y, text: `+${amount}`, cls: "heal" });
+          this.events.push({ type: "buff", uid: a.uid, fx: "heal" });
+        }
+        break;
+      }
+      case "rally": {
+        const amount = Math.round(base);
+        for (const a of allies()) {
+          a.shield += amount;
+          this.events.push({ type: "buff", uid: a.uid, fx: "shield" });
+        }
+        this.floats.push({ x: u.x, y: u.y, text: `🛡全体+${amount}`, cls: "cast" });
+        break;
+      }
+      case "frenzy": {
+        // 自己強化（この戦闘中ずっと持続）
+        u.atkSpeed *= 1.6;
+        u.critChance = Math.min(1, u.critChance + 0.4);
+        this.events.push({ type: "buff", uid: u.uid, fx: "heal" });
+        this.floats.push({ x: u.x, y: u.y, text: "⚡狂乱", cls: "cast" });
+        break;
+      }
+      case "manaburn": {
+        this.events.push({
+          type: "skillshot",
+          fromUid: u.uid,
+          toX: target.x,
+          toY: target.y,
+          fx: sk.fx ?? "bolt",
+        });
+        this.dealDamage(u, target, base, kind, false);
+        if (target.alive && target.mana > 0) {
+          target.mana = 0;
+          this.floats.push({ x: target.x, y: target.y, text: "マナ枯渇", cls: "poison" });
+        }
+        break;
+      }
+      case "freeze": {
+        this.events.push({ type: "aoe", x: target.x, y: target.y, kind: "frost" });
+        for (const t of foes()) {
+          if (cheb(t, target) <= 1) {
+            this.dealDamage(u, t, base, kind, false);
+            if (t.alive) {
+              t.stunTicks = Math.max(t.stunTicks, 20);
+              this.floats.push({ x: t.x, y: t.y, text: "🧊", cls: "cast" });
+            }
+          }
+        }
         break;
       }
     }
