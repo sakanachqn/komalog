@@ -186,6 +186,10 @@ function traitPanel(board: OwnedUnit[]): HTMLElement {
   return p;
 }
 
+/** プレイした感想を送るGoogleフォーム */
+const FEEDBACK_FORM_URL =
+  "https://docs.google.com/forms/d/e/1FAIpQLSc9mRujMLrt2HAwvRpEVEzfcIRlMopVetpaZ19wzRN3wCr95g/viewform";
+
 /* ================= 遊び方（ヘルプ） ================= */
 
 const HELP_HTML = `
@@ -372,6 +376,11 @@ export function renderTitle(): HTMLElement {
     bar.appendChild(btn("ランを開始", "primary", () => go({ kind: "starter" })));
   }
   bar.appendChild(btn("📖 遊び方", "", () => showHelp()));
+  bar.appendChild(
+    btn("💬 感想を送る", "", () => {
+      window.open(FEEDBACK_FORM_URL, "_blank", "noopener,noreferrer");
+    }),
+  );
   s.appendChild(bar);
   return s;
 }
