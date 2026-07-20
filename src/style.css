@@ -35,9 +35,10 @@ body {
 }
 
 #app {
-  max-width: 900px;
+  /* 16:9のワイド画面を前提に横幅を広く使う */
+  max-width: 1400px;
   margin: 0 auto;
-  padding: 12px;
+  padding: 12px 20px;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -328,11 +329,6 @@ button.primary:hover:not(:disabled) {
 .cell.ally-zone {
   background: rgba(74, 158, 106, 0.08);
 }
-.cell.droppable {
-  outline: 2px dashed var(--gold);
-  outline-offset: -2px;
-  cursor: pointer;
-}
 
 .unit {
   position: absolute;
@@ -397,6 +393,17 @@ button.primary:hover:not(:disabled) {
 .unit.selected {
   outline: 2px solid var(--gold);
   background: rgba(240, 192, 96, 0.15);
+}
+/* 選択中の敵は赤系でハイライト */
+.unit.enemy.selected {
+  outline-color: var(--enemy);
+  background: rgba(176, 74, 85, 0.22);
+}
+.unit.enemy {
+  cursor: pointer;
+}
+.unit-info.enemy-info h3 {
+  color: var(--enemy);
 }
 .unit.dead {
   animation: deathAnim 0.45s ease-in forwards;
@@ -725,7 +732,7 @@ button.primary:hover:not(:disabled) {
 
 /* ===== ベンチ・サイドパネル ===== */
 .side-panel {
-  width: 250px;
+  width: 380px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -751,10 +758,44 @@ button.primary:hover:not(:disabled) {
 .trait-row.active { color: var(--gold); }
 .trait-row.inactive { color: var(--muted); }
 .trait-row .desc {
-  font-size: 11px;
+  font-size: 12px;
   margin-left: auto;
   text-align: right;
+  padding-left: 8px;
 }
+
+/* シナジーの発動閾値表示: (2/4/6):3 */
+.trait-name {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  white-space: nowrap;
+}
+.trait-th {
+  font-size: 11px;
+  letter-spacing: 0.5px;
+}
+.trait-th .th {
+  color: var(--muted);
+  opacity: 0.65;
+}
+/* 達成済みの閾値だけ点灯させる */
+.trait-th .th.reached {
+  color: var(--gold);
+  opacity: 1;
+  font-weight: bold;
+}
+.trait-th .th-sep,
+.trait-th .th-paren {
+  color: var(--border);
+}
+.trait-count {
+  font-weight: bold;
+  font-size: 12px;
+  margin-left: -3px; /* 「(2/4/6):3」とコロンを詰める */
+}
+.trait-row.active .trait-count { color: var(--gold); }
+.trait-row.inactive .trait-count { color: var(--text); }
 
 .bench {
   display: grid;
@@ -843,7 +884,6 @@ button.primary:hover:not(:disabled) {
 .bench-slot .icon { font-size: 22px; }
 .bench-slot .stars { font-size: 8px; color: var(--gold); }
 .bench-slot.selected { border: 2px solid var(--gold); }
-.bench-slot.droppable { border: 2px dashed var(--gold); }
 
 .unit-info .row {
   display: flex;
@@ -886,6 +926,26 @@ button.primary:hover:not(:disabled) {
 }
 .center-screen h2 { font-size: 30px; }
 .center-screen .sub { color: var(--muted); line-height: 1.8; }
+
+/* コンテンツ＋右端シナジーパネルの2カラム */
+.page-flex {
+  flex: 1;
+  display: flex;
+  gap: 14px;
+  align-items: stretch;
+  width: 100%;
+}
+.page-flex > .center-screen {
+  min-width: 0;
+}
+.side-trait {
+  width: 380px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 12px;
+  align-self: flex-start;
+  margin-top: 12px;
+}
 .card-row {
   display: flex;
   gap: 14px;
@@ -970,8 +1030,8 @@ button.primary:hover:not(:disabled) {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 6px 12px;
-  max-width: 720px;
+  padding: 6px 14px;
+  max-width: 1000px;
   font-size: 18px;
 }
 .rs-section {
@@ -1030,4 +1090,15 @@ button.primary:hover:not(:disabled) {
 @media (max-width: 760px) {
   :root { --cell: 46px; }
   .side-panel { width: 100%; max-width: 380px; }
+  /* 狭い画面ではシナジーパネルをコンテンツの下へ回り込ませる */
+  .page-flex {
+    flex-direction: column;
+    align-items: center;
+  }
+  .side-trait {
+    width: 100%;
+    max-width: 380px;
+    position: static;
+    margin-top: 0;
+  }
 }

@@ -1,4 +1,12 @@
-import { Battle, TICK_MS, computeTraits, enemyMults } from "./battle";
+import {
+  Battle,
+  CRIT_MULT,
+  ENEMY_CRIT_CHANCE,
+  TICK_MS,
+  computeTraits,
+  enemyMults,
+  previewAllyStats,
+} from "./battle";
 import type { BattleEvent, CombatUnit } from "./battle";
 import { enemyTeamFor } from "./data/enemies";
 import { CRAFT_RECIPES, ITEM_BY_ID, RELIC_BY_ID, rollItem, rollRelicChoices } from "./data/relics";
@@ -22,12 +30,11 @@ import {
   maxedDefIds,
   newRun,
   sellUnit,
-  starMult,
   teamCap,
   unitDef,
 } from "./state";
 import { generateMap } from "./map";
-import type { MapNode, OwnedUnit, RunState, UnitDef } from "./types";
+import type { EnemyDef, MapNode, OwnedUnit, RunState, UnitDef } from "./types";
 
 /* ================= ヘルパー ================= */
 
@@ -147,13 +154,48 @@ function traitPanel(board: OwnedUnit[]): HTMLElement {
   for (const s of statuses) {
     const info = TRAITS[s.trait];
     const row = el("div", `trait-row ${s.tier > 0 ? "active" : "inactive"}`);
-    row.append(
-      el("span", "", `${info.icon} ${info.name} (${s.count})`),
-      el("span", "desc", s.tier > 0 ? info.desc(s.tier) : `あと${info.thresholds[0] - s.count}体`),
-    );
+
+    // 「⚔️ 戦士 (2/4/6):3」形式。達成済みの閾値だけ色を変える
+    const label = el("span", "trait-name");
+    label.appendChild(el("span", "", `${info.icon} ${info.name}`));
+    const th = el("span", "trait-th");
+    th.appendChild(el("span", "th-paren", "("));
+    info.thresholds.forEach((t, i) => {
+      if (i > 0) th.appendChild(el("span", "th-sep", "/"));
+      th.appendChild(el("span", `th${s.count >= t ? " reached" : ""}`, String(t)));
+    });
+    th.appendChild(el("span", "th-paren", ")"));
+    label.appendChild(th);
+    label.appendChild(el("span", "trait-count", `:${s.count}`));
+
+    // 次の段階までの残り（すべて到達済みなら省略）
+    const next = info.thresholds.find((t) => s.count < t);
+    const desc =
+      s.tier > 0
+        ? info.desc(s.tier) + (next ? `（あと${next - s.count}体）` : "")
+        : `あと${info.thresholds[0] - s.count}体で発動`;
+
+    row.append(label, el("span", "desc", desc));
     p.appendChild(row);
   }
   return p;
+}
+
+/** コンテンツの右側にシナジーパネルを添えたレイアウトを作る。
+ *  返り値の refreshSide() でシナジー表示だけ再描画できる */
+function withTraitSide(
+  run: RunState,
+  content: HTMLElement,
+): { root: HTMLElement; refreshSide: () => void } {
+  const root = el("div", "page-flex");
+  const side = el("div", "side-panel side-trait");
+  const refreshSide = () => {
+    side.innerHTML = "";
+    side.appendChild(traitPanel(boardUnits(run)));
+  };
+  refreshSide();
+  root.append(content, side);
+  return { root, refreshSide };
 }
 
 /* ================= タイトル ================= */
@@ -500,6 +542,7 @@ function enterNode(node: MapNode) {
 export function renderPrepare(node: MapNode): HTMLElement {
   const run = ctx.run!;
   let selected: number | null = null; // iid
+  let selectedEnemy: number | null = null; // ctx.enemyTeam.spawns のインデックス
   let selectedItem: number | null = null; // run.items のインデックス
   let justDragged = false; // ドラッグ直後のclickイベントを無視するためのフラグ
 
@@ -514,7 +557,7 @@ export function renderPrepare(node: MapNode): HTMLElement {
   const hint = el(
     "div",
     "hint",
-    "ユニットをドラッグ＆ドロップで配置・入替え。クリックで選択して詳細確認もできる。",
+    "ユニットはドラッグ＆ドロップで配置・入替え。クリックでステータスを表示（敵もクリックできる）。",
   );
   s.appendChild(hint);
 
@@ -647,11 +690,11 @@ export function renderPrepare(node: MapNode): HTMLElement {
     boardHolder.innerHTML = "";
     side.innerHTML = "";
 
-    const { wrap, cells } = makeBoard();
+    const { wrap } = makeBoard();
 
     // 敵プレビュー（アセンション・幕の掟込みの実効値を表示）
     const em = enemyMults(run, node.type as "battle" | "elite" | "boss");
-    for (const sp of ctx.enemyTeam!.spawns) {
+    ctx.enemyTeam!.spawns.forEach((sp, idx) => {
       const u = el("div", "unit enemy");
       const pos = cellPos(sp.x, sp.y);
       u.style.left = pos.left;
@@ -660,9 +703,16 @@ export function renderPrepare(node: MapNode): HTMLElement {
       const hp = Math.round(sp.def.hp * ctx.enemyTeam!.scale * em.hp);
       const atk = Math.round(sp.def.atk * ctx.enemyTeam!.scale * em.atk);
       u.title = `${sp.def.name}\nHP ${hp} / 攻撃 ${atk}${sp.def.skill ? `\nスキル: ${sp.def.skill.name}` : ""}`;
-      u.style.cursor = "help";
+      if (idx === selectedEnemy) u.classList.add("selected");
+      u.addEventListener("click", () => {
+        if (justDragged) return;
+        selectedEnemy = selectedEnemy === idx ? null : idx;
+        selected = null;
+        selectedItem = null;
+        refresh();
+      });
       wrap.appendChild(u);
-    }
+    });
 
     // 自ユニット（盤面）
     for (const ou of boardUnits(run)) {
@@ -683,28 +733,6 @@ export function renderPrepare(node: MapNode): HTMLElement {
       u.addEventListener("click", () => onUnitClick(ou));
       enableDrag(u, ou);
       wrap.appendChild(u);
-    }
-
-    // マスのクリック（自陣のみ）
-    for (let y = 4; y < BOARD_ROWS; y++) {
-      for (let x = 0; x < BOARD_COLS; x++) {
-        const occupied = run.roster.some((o) => o.pos && o.pos.x === x && o.pos.y === y);
-        if (selected !== null && !occupied) {
-          cells[y][x].classList.add("droppable");
-          cells[y][x].addEventListener("click", () => {
-            if (justDragged || selected === null) return;
-            const u = run.roster.find((o) => o.iid === selected)!;
-            const fromBench = u.pos === null;
-            if (fromBench && boardUnits(run).length >= teamCap(run)) {
-              hint.textContent = `⚠️ 配置上限は${teamCap(run)}体まで！`;
-              return;
-            }
-            u.pos = { x, y };
-            selected = null;
-            refresh();
-          });
-        }
-      }
     }
 
     boardHolder.appendChild(wrap);
@@ -729,15 +757,6 @@ export function renderPrepare(node: MapNode): HTMLElement {
         slot.title = def.name;
         slot.addEventListener("click", () => onUnitClick(ou));
         enableDrag(slot, ou);
-      } else if (selected !== null) {
-        slot.classList.add("droppable");
-        slot.addEventListener("click", () => {
-          if (justDragged || selected === null) return;
-          const u = run.roster.find((o) => o.iid === selected)!;
-          u.pos = null;
-          selected = null;
-          refresh();
-        });
       }
       bench.appendChild(slot);
     }
@@ -825,41 +844,37 @@ export function renderPrepare(node: MapNode): HTMLElement {
     // サイドパネル
     side.appendChild(traitPanel(boardUnits(run)));
     const sel = run.roster.find((o) => o.iid === selected);
-    if (sel) side.appendChild(unitInfoPanel(
-      sel,
-      () => {
-        sellUnit(run, sel.iid);
-        selected = null;
-        refresh();
-      },
-      () => {
-        if (sel.item) {
-          run.items.push(sel.item);
-          sel.item = null;
-        }
-        refresh();
-      },
-    ));
+    if (sel) {
+      side.appendChild(unitInfoPanel(
+        sel,
+        () => {
+          sellUnit(run, sel.iid);
+          selected = null;
+          refresh();
+        },
+        () => {
+          if (sel.item) {
+            run.items.push(sel.item);
+            sel.item = null;
+          }
+          refresh();
+        },
+      ));
+    } else if (selectedEnemy !== null) {
+      const sp = ctx.enemyTeam!.spawns[selectedEnemy];
+      if (sp) side.appendChild(enemyInfoPanel(sp.def, ctx.enemyTeam!.scale, em));
+    }
   }
 
+  /** クリックはステータス表示のみ（移動・入替えはドラッグ＆ドロップ） */
   function onUnitClick(ou: OwnedUnit) {
     if (justDragged) return;
     if (selectedItem !== null) {
       equipItem(selectedItem, ou.iid);
       return;
     }
-    if (selected === ou.iid) {
-      selected = null;
-    } else if (selected !== null) {
-      // 選択中に別ユニットをクリック → 位置を交換
-      const a = run.roster.find((o) => o.iid === selected)!;
-      const tmp = a.pos;
-      a.pos = ou.pos;
-      ou.pos = tmp;
-      selected = null;
-    } else {
-      selected = ou.iid;
-    }
+    selected = selected === ou.iid ? null : ou.iid;
+    selectedEnemy = null;
     refresh();
   }
 
@@ -867,24 +882,38 @@ export function renderPrepare(node: MapNode): HTMLElement {
   return s;
 }
 
-function unitInfoPanel(ou: OwnedUnit, onSell: () => void, onUnequip?: () => void): HTMLElement {
-  const def = unitDef(ou);
-  const m = starMult(ou.star);
-  const p = el("div", "panel unit-info");
-  p.appendChild(el("h3", "", `${def.icon} ${def.name} ${starsText(ou.star)}`));
-  const rows: [string, string][] = [
-    ["HP", String(Math.round(def.hp * m))],
-    ["攻撃力", String(Math.round(def.atk * m))],
-    ["攻撃速度", def.atkSpeed.toFixed(2)],
-    ["射程", String(def.range)],
-    ["防御", String(def.armor)],
-    ["特性", def.traits.map((t) => `${TRAITS[t].icon}${TRAITS[t].name}`).join(" ")],
-  ];
+/** 射程の表記（例: 近距離(1)） */
+function rangeLabel(range: number): string {
+  const kind = range <= 1 ? "近距離" : range === 2 ? "中距離" : "遠距離";
+  return `${kind}(${range})`;
+}
+
+function statRows(p: HTMLElement, rows: [string, string][]) {
   for (const [k, v] of rows) {
     const r = el("div", "row");
     r.append(el("span", "", k), el("span", "", v));
     p.appendChild(r);
   }
+}
+
+function unitInfoPanel(ou: OwnedUnit, onSell: () => void, onUnequip?: () => void): HTMLElement {
+  const run = ctx.run!;
+  const def = unitDef(ou);
+  // シナジー・アイテム・レリック込みの実効ステータス（戦闘と同じ計算）
+  const cu = previewAllyStats(run, ou);
+  const p = el("div", "panel unit-info");
+  p.appendChild(el("h3", "", `${def.icon} ${def.name} ${starsText(ou.star)}`));
+  statRows(p, [
+    ["HP", cu.shield > 0 ? `${cu.maxHp}（🛡+${cu.shield}）` : String(cu.maxHp)],
+    ["攻撃力", String(cu.atk)],
+    ["攻撃速度", cu.atkSpeed.toFixed(2)],
+    ["クリティカル率", `${Math.round(cu.critChance * 100)}%`],
+    ["クリティカルダメージ", `${Math.round(CRIT_MULT * 100)}%`],
+    ["射程", rangeLabel(cu.range)],
+    ["防御", String(cu.armor)],
+    ["開始マナ", `${cu.mana} / ${cu.maxMana}`],
+    ["特性", def.traits.map((t) => `${TRAITS[t].icon}${TRAITS[t].name}`).join(" ")],
+  ]);
   const skill = el("div", "skill");
   skill.innerHTML = `<b>${def.skill.name}</b>（マナ${def.skill.mana}）<br>${def.skill.desc}`;
   p.appendChild(skill);
@@ -899,6 +928,29 @@ function unitInfoPanel(ou: OwnedUnit, onSell: () => void, onUnequip?: () => void
   if (ou.item && onUnequip) bar.appendChild(btn("装備を外す", "", onUnequip));
   bar.appendChild(btn(`売却 (+${sellValue}G)`, "", onSell));
   p.appendChild(bar);
+  return p;
+}
+
+/** 敵ユニットのステータス（アセンション・幕の掟の強化を反映した実効値） */
+function enemyInfoPanel(def: EnemyDef, scale: number, em: ReturnType<typeof enemyMults>): HTMLElement {
+  const p = el("div", "panel unit-info enemy-info");
+  p.appendChild(el("h3", "", `${def.icon} ${def.name}（敵）`));
+  statRows(p, [
+    ["HP", String(Math.round(def.hp * scale * em.hp))],
+    ["攻撃力", String(Math.round(def.atk * scale * em.atk))],
+    ["攻撃速度", (def.atkSpeed * em.as).toFixed(2)],
+    ["クリティカル率", `${Math.round(ENEMY_CRIT_CHANCE * 100)}%`],
+    ["クリティカルダメージ", `${Math.round(CRIT_MULT * 100)}%`],
+    ["射程", rangeLabel(def.range)],
+    ["防御", String(def.armor + em.armor)],
+  ]);
+  const skill = el("div", "skill");
+  if (def.skill) {
+    skill.innerHTML = `<b>${def.skill.name}</b>（マナ${def.skill.mana}）<br>${def.skill.desc}`;
+  } else {
+    skill.innerHTML = `<span style="opacity:.7">スキルなし（通常攻撃のみ）</span>`;
+  }
+  p.appendChild(skill);
   return p;
 }
 
@@ -1219,6 +1271,10 @@ function goldReward(node: MapNode): number {
 /* ================= リザルト ================= */
 
 export function renderResult(node: MapNode, win: boolean, hpLost: number): HTMLElement {
+  return withTraitSide(ctx.run!, buildResult(node, win, hpLost)).root;
+}
+
+function buildResult(node: MapNode, win: boolean, hpLost: number): HTMLElement {
   const run = ctx.run!;
   const s = el("div", "center-screen");
 
@@ -1475,10 +1531,12 @@ export function renderShop(_node: MapNode, rescue = false): HTMLElement {
     stripHolder.appendChild(rosterStrip(run));
     refresh();
     refreshRoster();
+    side.refreshSide(); // 売却などで盤面が変わればシナジーも更新
   }
 
   center.append(row, goodsRow, bar);
-  s.append(center, rosterPanel);
+  const side = withTraitSide(run, center);
+  s.append(side.root, rosterPanel);
   refresh();
   refreshRoster();
   return s;
@@ -1537,7 +1595,7 @@ export function renderRest(_node: MapNode): HTMLElement {
 
   row.append(heal, train);
   center.appendChild(row);
-  s.appendChild(center);
+  s.appendChild(withTraitSide(run, center).root);
   return s;
 }
 
@@ -1700,7 +1758,7 @@ export function renderEvent(_node: MapNode): HTMLElement {
     row.appendChild(card);
   }
   center.appendChild(row);
-  s.appendChild(center);
+  s.appendChild(withTraitSide(run, center).root);
   return s;
 }
 

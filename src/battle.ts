@@ -8,6 +8,10 @@ import type { OwnedUnit, RunState, SkillDef, TraitId } from "./types";
 export const TICK_MS = 100; // 10 tick/秒
 const MOVE_CD = 4; // 4tickごとに1マス移動
 const MAX_TICKS = 900; // 90秒で強制終了
+/** クリティカル時のダメージ倍率 */
+export const CRIT_MULT = 1.6;
+/** 敵のクリティカル率 */
+export const ENEMY_CRIT_CHANCE = 0.05;
 
 export interface CombatUnit {
   uid: number;
@@ -106,32 +110,26 @@ export function computeTraits(board: OwnedUnit[]): TraitStatus[] {
   return out;
 }
 
-export class Battle {
-  units: CombatUnit[] = [];
-  floats: FloatText[] = [];
-  events: BattleEvent[] = [];
-  ticks = 0;
-  /** 僧侶シナジー: 毎秒の味方全体回復率（最大HP比） */
-  private allyRegen = 0;
-  private nextUid = 1;
-
-  constructor(run: RunState, team: EnemyTeam, nodeType: "battle" | "elite" | "boss" = "battle") {
-    const rule = ACT_RULE_BY_ID.get(run.actRule)?.e ?? {};
-    const board = run.roster.filter((u) => u.pos !== null);
-    const traits = computeTraits(board);
-    const tierOf = (t: TraitId) => traits.find((s) => s.trait === t)?.tier ?? 0;
-
-    for (const u of board) {
+/** 味方1体の実効ステータスを構築（シナジー・アイテム・レリック・幕の掟込み）。
+ *  戦闘生成と準備画面のステータス表示で同じ計算を共有する */
+export function buildAllyUnit(
+  run: RunState,
+  u: OwnedUnit,
+  traits: TraitStatus[],
+  uid = 0,
+): CombatUnit {
+  const rule = ACT_RULE_BY_ID.get(run.actRule)?.e ?? {};
+  const tierOf = (t: TraitId) => traits.find((s) => s.trait === t)?.tier ?? 0;
       const def = UNIT_BY_ID.get(u.defId)!;
       const m = starMult(u.star);
       const cu: CombatUnit = {
-        uid: this.nextUid++,
+        uid,
         side: "ally",
         name: def.name,
         icon: def.icon,
         star: u.star,
-        x: u.pos!.x,
-        y: u.pos!.y,
+        x: u.pos?.x ?? 0,
+        y: u.pos?.y ?? 0,
         hp: Math.round(def.hp * m),
         maxHp: Math.round(def.hp * m),
         shield: 0,
@@ -201,7 +199,35 @@ export class Battle {
       if (has("hourglass")) cu.mana += 20;
       if (rule.startMana) cu.mana += rule.startMana; // 幕の掟: 荒ぶる嵐
       cu.mana = Math.min(cu.mana, cu.maxMana - 10); // 開幕即発動は防ぐ
-      this.units.push(cu);
+      return cu;
+}
+
+/** 準備画面のステータス表示用: 守護者シールドまで含めた実効ステータス */
+export function previewAllyStats(run: RunState, u: OwnedUnit): CombatUnit {
+  const board = run.roster.filter((x) => x.pos !== null);
+  const traits = computeTraits(board);
+  const cu = buildAllyUnit(run, u, traits);
+  const gTier = traits.find((s) => s.trait === "guardian")?.tier ?? 0;
+  if (gTier > 0) cu.shield += Math.round(cu.maxHp * [0, 0.12, 0.25, 0.45][gTier]);
+  return cu;
+}
+
+export class Battle {
+  units: CombatUnit[] = [];
+  floats: FloatText[] = [];
+  events: BattleEvent[] = [];
+  ticks = 0;
+  /** 僧侶シナジー: 毎秒の味方全体回復率（最大HP比） */
+  private allyRegen = 0;
+  private nextUid = 1;
+
+  constructor(run: RunState, team: EnemyTeam, nodeType: "battle" | "elite" | "boss" = "battle") {
+    const board = run.roster.filter((u) => u.pos !== null);
+    const traits = computeTraits(board);
+    const tierOf = (t: TraitId) => traits.find((s) => s.trait === t)?.tier ?? 0;
+
+    for (const u of board) {
+      this.units.push(buildAllyUnit(run, u, traits, this.nextUid++));
     }
     // 守護者: 味方全員にシールド
     const gTier = tierOf("guardian");
@@ -234,7 +260,7 @@ export class Battle {
         atkSpeed: s.def.atkSpeed * asMult,
         armor: s.def.armor + em.armor,
         spellPower: 0,
-        critChance: 0.05,
+        critChance: ENEMY_CRIT_CHANCE,
         range: s.def.range,
         mana: 0,
         maxMana: s.def.skill?.mana ?? 999,
@@ -385,7 +411,7 @@ export class Battle {
     const slowMult = u.slowTicks > 0 ? 0.7 : 1;
     u.atkCd = Math.max(2, Math.round(10 / (u.atkSpeed * slowMult)));
     const crit = Math.random() < u.critChance;
-    const dmg = this.atkOf(u) * (crit ? 1.6 : 1);
+    const dmg = this.atkOf(u) * (crit ? CRIT_MULT : 1);
     this.events.push({ type: "attack", fromUid: u.uid, toUid: target.uid, ranged: u.range > 1 });
     const dealt = this.dealDamage(u, target, dmg, "physical", crit);
     if (u.lifesteal > 0 && dealt > 0) {
@@ -694,7 +720,7 @@ export class Battle {
   ): number {
     let dmg = raw;
     if (kind === "physical") dmg = raw * (100 / (100 + target.armor));
-    if (kind === "magic" && crit) dmg *= 1.6;
+    if (kind === "magic" && crit) dmg *= CRIT_MULT;
     dmg = Math.max(1, Math.round(dmg));
 
     let remain = dmg;
