@@ -95,6 +95,97 @@ button.primary:hover:not(:disabled) {
   border-radius: 6px;
 }
 
+/* ===== モーダル（遊び方） ===== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fadeIn 0.15s ease-out;
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.modal-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  width: min(900px, 100%);
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 20px 14px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+  animation: modalIn 0.2s cubic-bezier(0.2, 1.3, 0.5, 1);
+}
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+}
+.modal-head h2 {
+  font-size: 22px;
+}
+.modal-close {
+  padding: 4px 12px;
+  font-size: 16px;
+}
+.modal-body {
+  overflow-y: auto;
+  padding-right: 6px;
+}
+/* 遊び方の本文 */
+.help-body section {
+  margin-bottom: 16px;
+}
+.help-body h4 {
+  color: var(--gold);
+  font-size: 15px;
+  margin-bottom: 5px;
+}
+.help-body p,
+.help-body li {
+  font-size: 13.5px;
+  line-height: 1.75;
+  color: var(--text);
+}
+.help-body ul,
+.help-body ol {
+  padding-left: 1.4em;
+}
+.help-body b {
+  color: var(--accent);
+}
+.help-example {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin: 6px 0;
+  display: inline-block;
+}
+.help-example .th {
+  color: var(--muted);
+  opacity: 0.65;
+}
+.help-example .th.reached {
+  color: var(--gold);
+  font-weight: bold;
+  opacity: 1;
+}
+
 /* ===== メタ進行（アセンション・実績・記録） ===== */
 .unlock-toast {
   position: fixed;
@@ -375,19 +466,26 @@ button.primary:hover:not(:disabled) {
   margin-top: 2px;
 }
 .unit .bar {
+  position: relative;
   height: 5px;
   border-radius: 2px;
   background: rgba(0, 0, 0, 0.55);
   overflow: hidden;
 }
 .unit .bar > i {
-  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
   height: 100%;
-  transition: width 0.15s;
+  transition: width 0.15s, left 0.15s;
 }
-.unit.ally .bar.hp > i { background: var(--ally); }
-.unit.enemy .bar.hp > i { background: var(--enemy); }
-.unit .bar.hp > i.shielded { background: var(--shield); }
+.unit.ally .bar.hp > i.fill-hp { background: var(--ally); }
+.unit.enemy .bar.hp > i.fill-hp { background: var(--enemy); }
+/* シールドはHPの右隣に白く重ねる */
+.unit .bar.hp > i.fill-shield {
+  background: var(--shield);
+  box-shadow: 0 0 4px rgba(200, 212, 232, 0.8);
+}
 .unit .bar.mana { height: 3px; }
 .unit .bar.mana > i { background: var(--mana); }
 .unit.selected {

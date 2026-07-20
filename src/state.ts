@@ -112,20 +112,32 @@ export function sellUnit(run: RunState, iid: number) {
   run.roster = run.roster.filter((x) => x.iid !== iid);
 }
 
-/** 空いている自陣マスに未配置ユニットを詰める（チーム上限まで） */
+/** 空いている自陣マスに未配置ユニット（ベンチの左から順）を詰める。
+ *  近接は前列、遠距離は後列を優先して置く。チーム上限まで */
 export function autoPlace(run: RunState) {
   const cap = teamCap(run);
-  const cells: { x: number; y: number }[] = [];
-  for (let y = 4; y < BOARD_ROWS; y++)
-    for (let x = 0; x < BOARD_COLS; x++) cells.push({ x, y });
+  const isFree = (x: number, y: number) =>
+    !run.roster.some((o) => o.pos && o.pos.x === x && o.pos.y === y);
+
   for (const u of run.roster) {
     if (boardUnits(run).length >= cap) break;
     if (u.pos) continue;
-    const free = cells.find(
-      (c) => !run.roster.some((o) => o.pos && o.pos.x === c.x && o.pos.y === c.y),
-    );
-    if (!free) break;
-    u.pos = { ...free };
+    const def = UNIT_BY_ID.get(u.defId)!;
+    // 射程に応じて埋める行の優先順（4=最前列, 7=最後列）
+    const rows =
+      def.range >= 3 ? [7, 6, 5, 4] : def.range === 2 ? [6, 5, 7, 4] : [4, 5, 6, 7];
+    let placed = false;
+    for (const y of rows) {
+      for (let x = 0; x < BOARD_COLS; x++) {
+        if (isFree(x, y)) {
+          u.pos = { x, y };
+          placed = true;
+          break;
+        }
+      }
+      if (placed) break;
+    }
+    if (!placed) break; // 盤面に空きがない
   }
 }
 

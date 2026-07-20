@@ -24,6 +24,7 @@ import {
   BOARD_COLS,
   BOARD_ROWS,
   addUnit,
+  autoPlace,
   benchUnits,
   boardUnits,
   globalFloor,
@@ -73,6 +74,10 @@ function hud(run: RunState): HTMLElement {
     h.appendChild(row);
   }
   h.append(el("span", "spacer"), el("span", "", `配置上限 ${teamCap(run)}体`));
+  const helpBtn = el("button", "mute-btn", "？");
+  helpBtn.title = "遊び方を見る";
+  helpBtn.addEventListener("click", () => showHelp());
+  h.appendChild(helpBtn);
   const muteBtn = el("button", "mute-btn", isMuted() ? "🔇" : "🔊");
   muteBtn.title = "効果音のオン/オフ";
   muteBtn.addEventListener("click", () => {
@@ -181,6 +186,127 @@ function traitPanel(board: OwnedUnit[]): HTMLElement {
   return p;
 }
 
+/* ================= 遊び方（ヘルプ） ================= */
+
+const HELP_HTML = `
+<section>
+  <h4>🎯 目的</h4>
+  <p>全3幕の分岐マップを進み、各幕の主を倒そう。最後に待つ<b>魔王</b>を討伐すればクリア。
+  戦闘に負けるとプレイヤーHPが減り、<b>0になるとゲームオーバー</b>だ。</p>
+</section>
+<section>
+  <h4>⚔️ 1ターンの流れ</h4>
+  <ol>
+    <li>マップで次に進むノードを選ぶ</li>
+    <li>準備画面でユニットを盤面に配置する</li>
+    <li>「戦闘開始」を押すと<b>自動で戦闘</b>（操作は不要）</li>
+    <li>勝てばゴールドと報酬、負ければプレイヤーHPが減る</li>
+  </ol>
+</section>
+<section>
+  <h4>🖱️ 配置のしかた</h4>
+  <ul>
+    <li>ユニットは<b>ドラッグ＆ドロップ</b>で移動・入れ替え・ベンチ出し入れができる</li>
+    <li><b>クリックするとステータス</b>を表示（敵ユニットもクリックできる）</li>
+    <li>盤面に置ける数は「配置上限」まで。ゲームが進むと増える</li>
+    <li>戦闘開始時、盤面に空きがあれば<b>ベンチの左から自動で配置</b>される</li>
+    <li>近接ユニットは前列、遠距離ユニットは後列に置くのが基本</li>
+  </ul>
+</section>
+<section>
+  <h4>⭐ 星アップ</h4>
+  <p>同じユニットを<b>3体</b>集めると自動で★2に、★2を3体集めると★3になる。
+  星が上がるとステータスが大きく伸びる（★2で1.8倍、★3で3.2倍）。
+  ★3にしたユニットはショップや報酬に出なくなる。</p>
+</section>
+<section>
+  <h4>🔗 シナジー</h4>
+  <p>同じ特性を持つユニットを複数並べると効果が発動する。表示の読み方：</p>
+  <p class="help-example">⚔️ 戦士 <span class="th reached">2</span>/<span class="th">4</span>/<span class="th">6</span>:3　防御力 +20</p>
+  <p>これは「2体で発動・4体と6体で強化」のシナジーに現在<b>3体</b>並んでいる状態。
+  達成した閾値だけが<b>金色に点灯</b>する。同じ種類のユニットは何体いても1体としてカウントされる。</p>
+</section>
+<section>
+  <h4>🎒 アイテム</h4>
+  <ul>
+    <li>ユニット1体につき<b>1つだけ</b>装備できる</li>
+    <li>装備は🎒欄からドラッグ＆ドロップ、またはクリック→ユニットをクリック</li>
+    <li>同じアイテムが2つあると<b>⚒️合成ボタン</b>が出て、強力な上位アイテムになる</li>
+  </ul>
+</section>
+<section>
+  <h4>🏺 レリック</h4>
+  <p>ラン全体に効き続ける永続強化。エリート撃破の報酬、ショップ、イベントで手に入る。
+  所持中のレリックは画面上部にアイコンで並ぶ（カーソルを合わせると効果が見える）。</p>
+</section>
+<section>
+  <h4>🗺️ マップのノード</h4>
+  <ul>
+    <li>⚔️ <b>戦闘</b> … 通常の戦闘。勝つとゴールドと仲間を1体もらえる</li>
+    <li>💀 <b>エリート</b> … 強敵。勝つと<b>レリック</b>とアイテムが確定で手に入る</li>
+    <li>🛒 <b>ショップ</b> … ユニット・アイテム・レリックを購入、手持ちの売却もできる</li>
+    <li>🏕️ <b>休憩</b> … HP回復か、手持ちユニットの複製（星アップの近道）を選ぶ</li>
+    <li>❓ <b>イベント</b> … 選択肢によって良いことも悪いことも起きる</li>
+    <li>👑 <b>ボス</b> … その幕の主。倒すと次の幕へ進める</li>
+  </ul>
+</section>
+<section>
+  <h4>💰 ゴールドの使い道</h4>
+  <p>ショップでユニット（コスト分のG）、アイテム、レリックを買える。リロールで品揃えを引き直すことも可能。
+  いらないユニットは<b>売却</b>してゴールドに戻せる（星が高いほど高値）。</p>
+</section>
+<section>
+  <h4>🛡️ シールドとマナ</h4>
+  <p>HPバーの<b>白い部分がシールド</b>。ダメージを肩代わりするが、<b>時間とともに少しずつ剥がれる</b>。
+  その下の青いバーが<b>マナ</b>で、攻撃したり被弾したりで溜まり、満タンになるとスキルが発動する。</p>
+</section>
+<section>
+  <h4>💀 負けたときは</h4>
+  <p>戦闘に負けてもマップは進める（プレイヤーHPは減る）。
+  <b>ボス戦に負けた場合</b>はダメージが大きい代わりに、割高だが品揃えの良い<b>闇商人</b>が現れる。
+  そこで立て直してからボスに再挑戦しよう。</p>
+</section>
+<section>
+  <h4>🔥 アセンション（挑戦段位）</h4>
+  <p>クリアすると次の段位が解放される。段位を上げるごとに<b>重いデバフと軽いバフ</b>がセットで追加され、
+  5・10・15・20段では特殊なバフも手に入る。腕試しにどうぞ。</p>
+</section>
+<section>
+  <h4>💡 コツ</h4>
+  <ul>
+    <li>序盤は安いユニットを3体集めて<b>★2</b>を作ると一気に強くなる</li>
+    <li>多くのシナジーは2体で発動する。同系統を意識して集めよう</li>
+    <li>ゲームは自動セーブされる。タイトルの「続きから」で再開できる</li>
+  </ul>
+</section>
+`;
+
+export function showHelp() {
+  const overlay = el("div", "modal-overlay");
+  const panel = el("div", "modal-panel");
+  const head = el("div", "modal-head");
+  head.append(el("h2", "", "📖 遊び方"), btn("✕", "modal-close", () => close()));
+  const body = el("div", "modal-body help-body");
+  body.innerHTML = HELP_HTML;
+  const foot = el("div", "toolbar");
+  foot.appendChild(btn("閉じる", "primary", () => close()));
+  panel.append(head, body, foot);
+  overlay.appendChild(panel);
+
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === "Escape") close();
+  };
+  function close() {
+    overlay.remove();
+    document.removeEventListener("keydown", onKey);
+  }
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) close(); // 背景クリックで閉じる
+  });
+  document.addEventListener("keydown", onKey);
+  document.body.appendChild(overlay);
+}
+
 /** コンテンツの右側にシナジーパネルを添えたレイアウトを作る。
  *  返り値の refreshSide() でシナジー表示だけ再描画できる */
 function withTraitSide(
@@ -245,6 +371,7 @@ export function renderTitle(): HTMLElement {
   } else {
     bar.appendChild(btn("ランを開始", "primary", () => go({ kind: "starter" })));
   }
+  bar.appendChild(btn("📖 遊び方", "", () => showHelp()));
   s.appendChild(bar);
   return s;
 }
@@ -595,6 +722,15 @@ export function renderPrepare(node: MapNode): HTMLElement {
     });
   }
 
+  /** ベンチの指定スロット位置へ移動（ベンチの並び順＝roster内の順序を組み替える） */
+  function moveToBenchSlot(ou: OwnedUnit, slotIndex: number) {
+    ou.pos = null;
+    const others = run.roster.filter((u) => u.pos === null && u.iid !== ou.iid);
+    const at = Math.max(0, Math.min(slotIndex, others.length));
+    const bench = [...others.slice(0, at), ou, ...others.slice(at)];
+    run.roster = [...run.roster.filter((u) => u.pos !== null), ...bench];
+  }
+
   function dropAt(ou: OwnedUnit, cx: number, cy: number) {
     const target = document.elementFromPoint(cx, cy);
     const unitEl = target?.closest<HTMLElement>(".unit");
@@ -613,12 +749,21 @@ export function renderPrepare(node: MapNode): HTMLElement {
       if (slot.dataset.iid) {
         const other = run.roster.find((o) => o.iid === Number(slot.dataset.iid));
         if (other && other.iid !== ou.iid) {
-          const tmp = ou.pos;
-          ou.pos = other.pos;
-          other.pos = tmp;
+          if (ou.pos === null && other.pos === null) {
+            // ベンチ同士 → 並び順を入れ替え
+            const ia = run.roster.indexOf(ou);
+            const ib = run.roster.indexOf(other);
+            [run.roster[ia], run.roster[ib]] = [run.roster[ib], run.roster[ia]];
+          } else {
+            // 盤面 ⇔ ベンチ → 位置を交換
+            const tmp = ou.pos;
+            ou.pos = other.pos;
+            other.pos = tmp;
+          }
         }
       } else {
-        ou.pos = null; // 空きベンチへ
+        // 空きスロットへ → ベンチのその位置に移動
+        moveToBenchSlot(ou, Number(slot.dataset.slot));
       }
     } else if (cell && cell.dataset.y !== undefined) {
       const x = Number(cell.dataset.x);
@@ -742,6 +887,7 @@ export function renderPrepare(node: MapNode): HTMLElement {
     const bu = benchUnits(run);
     for (let i = 0; i < BENCH_SIZE; i++) {
       const slot = el("div", "bench-slot");
+      slot.dataset.slot = String(i);
       const ou = bu[i];
       if (ou) {
         const def = unitDef(ou);
@@ -832,8 +978,11 @@ export function renderPrepare(node: MapNode): HTMLElement {
     bar.append(
       el("span", "", `配置 ${boardUnits(run).length}/${cap}`),
       btn("⚔️ 戦闘開始", "primary", () => {
+        // 盤面に空きがあればベンチの左から自動で埋める
+        autoPlace(run);
         if (boardUnits(run).length === 0) {
           hint.textContent = "⚠️ 最低1体は配置しよう！";
+          refresh();
           return;
         }
         go({ kind: "battle", node });
@@ -973,7 +1122,10 @@ export function renderBattle(node: MapNode): HTMLElement {
   boardHolder.appendChild(wrap);
 
   // ユニット要素
-  const unitEls = new Map<number, { root: HTMLElement; hp: HTMLElement; mana: HTMLElement | null }>();
+  const unitEls = new Map<
+    number,
+    { root: HTMLElement; hp: HTMLElement; shield: HTMLElement; mana: HTMLElement | null }
+  >();
   for (const cu of battle.units) {
     const u = el("div", `unit ${cu.side}`);
     const pos = cellPos(cu.x, cu.y);
@@ -983,8 +1135,9 @@ export function renderBattle(node: MapNode): HTMLElement {
     u.append(el("div", "stars", cu.side === "ally" ? starsText(cu.star) : ""), el("div", "icon", cu.icon));
     const bars = el("div", "bars");
     const hpBar = el("div", "bar hp");
-    const hpFill = el("i");
-    hpBar.appendChild(hpFill);
+    const hpFill = el("i", "fill-hp");
+    const shieldFill = el("i", "fill-shield");
+    hpBar.append(hpFill, shieldFill);
     bars.appendChild(hpBar);
     let manaFill: HTMLElement | null = null;
     if (cu.skill) {
@@ -995,7 +1148,7 @@ export function renderBattle(node: MapNode): HTMLElement {
     }
     u.appendChild(bars);
     wrap.appendChild(u);
-    unitEls.set(cu.uid, { root: u, hp: hpFill, mana: manaFill });
+    unitEls.set(cu.uid, { root: u, hp: hpFill, shield: shieldFill, mana: manaFill });
   }
 
   let speed = ctx.battleSpeed;
@@ -1017,9 +1170,13 @@ export function renderBattle(node: MapNode): HTMLElement {
     const pos = cellPos(cu.x, cu.y);
     e.root.style.left = pos.left;
     e.root.style.top = pos.top;
-    const pct = Math.max(0, (cu.hp / cu.maxHp) * 100);
-    e.hp.style.width = `${pct}%`;
-    e.hp.classList.toggle("shielded", cu.shield > 0);
+    // バー全体を「HP + シールド」で按分し、シールド分を白く積む
+    const total = cu.maxHp + cu.shield;
+    const hpPct = Math.max(0, (cu.hp / total) * 100);
+    const shPct = Math.max(0, (cu.shield / total) * 100);
+    e.hp.style.width = `${hpPct}%`;
+    e.shield.style.left = `${hpPct}%`;
+    e.shield.style.width = `${shPct}%`;
     if (e.mana) e.mana.style.width = `${Math.min(100, (cu.mana / cu.maxMana) * 100)}%`;
     e.root.classList.toggle("stunned", cu.alive && cu.stunTicks > 0);
     if (!cu.alive && !e.root.classList.contains("dead")) {

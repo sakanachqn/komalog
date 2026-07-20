@@ -10,6 +10,8 @@ const MOVE_CD = 4; // 4tickごとに1マス移動
 const MAX_TICKS = 900; // 90秒で強制終了
 /** クリティカル時のダメージ倍率 */
 export const CRIT_MULT = 1.6;
+/** シールドの毎秒減衰率（重ねがけで無限に硬くなるのを防ぐ） */
+const SHIELD_DECAY_PER_SEC = 0.08;
 /** 敵のクリティカル率 */
 export const ENEMY_CRIT_CHANCE = 0.05;
 
@@ -311,6 +313,14 @@ export class Battle {
         if (u.alive && u.side === "ally" && u.hp < u.maxHp) {
           u.hp = Math.min(u.maxHp, u.hp + Math.max(1, Math.round(u.maxHp * this.allyRegen)));
         }
+      }
+    }
+    // シールドは毎秒少しずつ剥がれる
+    if (this.ticks % 10 === 0) {
+      for (const u of this.units) {
+        if (!u.alive || u.shield <= 0) continue;
+        u.shield = Math.round(u.shield * (1 - SHIELD_DECAY_PER_SEC));
+        if (u.shield < 5) u.shield = 0; // 端数が残り続けないよう切り捨て
       }
     }
     for (const u of this.units) {
