@@ -1460,6 +1460,20 @@ button.primary:hover:not(:disabled) {
   padding: 2px 8px;
   font-size: 11px;
 }
+.abandon-btn {
+  padding: 5px 9px;
+  color: #ffd6d6;
+  background: rgba(130, 45, 55, 0.45);
+  border: 1px solid rgba(255, 120, 130, 0.55);
+}
+.abandon-btn:hover { background: rgba(170, 55, 65, 0.65); }
+.abandon-confirm { max-width: 460px; text-align: center; }
+.abandon-confirm .toolbar { justify-content: center; margin-top: 18px; }
+.abandon-confirm .danger {
+  color: #fff;
+  background: #a83d4b;
+  border-color: #d86874;
+}
 
 @media (max-width: 760px) {
   .compendium-grid { grid-template-columns: 1fr; }

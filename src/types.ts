@@ -182,4 +182,4 @@ export type Screen =
   | { kind: "rest"; node: MapNode }
   | { kind: "event"; node: MapNode }
   | { kind: "actclear"; clearedAct: number }
-  | { kind: "gameover"; win: boolean };
+  | { kind: "gameover"; win: boolean; abandoned?: boolean };

@@ -58,7 +58,26 @@ function btn(label: string, cls: string, onClick: () => void): HTMLButtonElement
   return b;
 }
 
-function hud(run: RunState): HTMLElement {
+function showAbandonConfirm(onConfirm: () => void): void {
+  if (document.querySelector(".abandon-overlay")) return;
+  const overlay = el("div", "modal-overlay abandon-overlay");
+  const panel = el("div", "modal-panel abandon-confirm");
+  panel.append(
+    el("h2", "", "🏳️ このランを諦めますか？"),
+    el("p", "", "現在の冒険を終了してタイトルへ戻ります。到達度に応じた記憶の欠片は獲得できます。"),
+  );
+  const actions = el("div", "toolbar");
+  actions.append(
+    btn("冒険を続ける", "primary", () => overlay.remove()),
+    btn("諦めて終了", "danger", () => { overlay.remove(); onConfirm(); }),
+  );
+  panel.appendChild(actions);
+  overlay.appendChild(panel);
+  overlay.addEventListener("click", (event) => { if (event.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+}
+
+function hud(run: RunState, onAbandon?: () => void): HTMLElement {
   const h = el("div", "hud");
   h.append(
     el("span", "hp", `❤️ ${run.playerHp}/${run.playerMaxHp}`),
@@ -89,6 +108,10 @@ function hud(run: RunState): HTMLElement {
     h.appendChild(row);
   }
   h.append(el("span", "spacer"), el("span", "", `配置上限 ${teamCap(run)}体`));
+  const abandonBtn = el("button", "abandon-btn", "🏳️ 諦める");
+  abandonBtn.title = "現在のランを終了する";
+  abandonBtn.addEventListener("click", () => showAbandonConfirm(onAbandon ?? (() => go({ kind: "gameover", win: false, abandoned: true }))));
+  h.appendChild(abandonBtn);
   const helpBtn = el("button", "mute-btn", "？");
   helpBtn.title = "遊び方を見る";
   helpBtn.addEventListener("click", () => showHelp());
@@ -1438,7 +1461,10 @@ export function renderBattle(node: MapNode): HTMLElement {
   const battle = new Battle(run, ctx.enemyTeam!, node.type as "battle" | "elite" | "boss");
 
   const s = el("div");
-  s.appendChild(hud(run));
+  s.appendChild(hud(run, () => {
+    clearInterval(timer);
+    go({ kind: "gameover", win: false, abandoned: true });
+  }));
   const area = el("div", "board-area");
   const boardHolder = el("div");
   const side = el("div", "side-panel");
@@ -2372,7 +2398,7 @@ function fmtTime(ms: number): string {
   return `${Math.floor(sec / 60)}分${String(sec % 60).padStart(2, "0")}秒`;
 }
 
-export function renderGameover(win: boolean): HTMLElement {
+export function renderGameover(win: boolean, abandoned = false): HTMLElement {
   const run = ctx.run!;
   const s = el("div", "center-screen");
   const m = meta();
@@ -2411,12 +2437,12 @@ export function renderGameover(win: boolean): HTMLElement {
       ),
     );
   } else {
-    s.appendChild(el("h2", "", "☠️ 力尽きた…"));
+    s.appendChild(el("h2", "", abandoned ? "🏳️ 冒険を切り上げた" : "☠️ 力尽きた…"));
     s.appendChild(
       el(
         "div",
         "sub",
-        `第${run.act}幕 フロア ${run.floorIndex + 1} で冒険は終わった。戦闘勝利数: ${run.battleCount}`,
+        `第${run.act}幕 フロア ${run.floorIndex + 1} で冒険は終わった。戦闘勝利数: ${run.battleCount}${abandoned ? "（途中終了）" : ""}`,
       ),
     );
   }

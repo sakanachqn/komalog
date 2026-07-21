@@ -82,7 +82,7 @@ function render(s: Screen) {
       app.appendChild(renderActClear(s.clearedAct));
       break;
     case "gameover":
-      app.appendChild(renderGameover(s.win));
+      app.appendChild(renderGameover(s.win, s.abandoned ?? false));
       break;
   }
   if (s.kind !== "title") {
