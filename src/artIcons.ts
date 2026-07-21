@@ -1,22 +1,28 @@
 import type { TraitId, UnitDef } from "./types";
 import type { ItemDef } from "./data/relics";
 import { ITEMS } from "./data/relics";
-import { TRAITS, UNITS } from "./data/units";
+import { TRAITS } from "./data/units";
 
-type ArtKind = "unit" | "item";
+declare const __ICON_BUILD_VERSION__: string;
+
+type ArtKind = "item";
 
 function art(kind: ArtKind, index: number, fallback: string, className = ""): HTMLSpanElement {
   const span = document.createElement("span");
   span.className = `art-icon art-${kind}${className ? ` ${className}` : ""}`;
   span.textContent = fallback;
   span.setAttribute("aria-label", fallback);
-  const folder = kind === "unit" ? "units" : "items";
-  span.style.backgroundImage = `url("${import.meta.env.BASE_URL}assets/icons/${folder}/${index}.png")`;
+  const folder = "items";
+  span.style.backgroundImage = `url("${import.meta.env.BASE_URL}assets/icons/${folder}/${index}.png?v=${__ICON_BUILD_VERSION__}")`;
   return span;
 }
 
 export function unitArt(def: UnitDef, className = ""): HTMLSpanElement {
-  return art("unit", Math.max(0, UNITS.findIndex((u) => u.id === def.id)) + 1, def.icon, className);
+  const span = document.createElement("span");
+  span.className = className;
+  span.textContent = def.icon;
+  span.setAttribute("aria-label", def.name);
+  return span;
 }
 
 export function synergyArt(id: TraitId, className = ""): HTMLSpanElement {
