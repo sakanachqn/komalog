@@ -3,16 +3,14 @@ import type { ItemDef } from "./data/relics";
 import { ITEMS } from "./data/relics";
 import { TRAITS, UNITS } from "./data/units";
 
-type ArtKind = "unit" | "synergy" | "item";
-
-const traitIds = Object.keys(TRAITS) as TraitId[];
+type ArtKind = "unit" | "item";
 
 function art(kind: ArtKind, index: number, fallback: string, className = ""): HTMLSpanElement {
   const span = document.createElement("span");
   span.className = `art-icon art-${kind}${className ? ` ${className}` : ""}`;
   span.textContent = fallback;
   span.setAttribute("aria-label", fallback);
-  const folder = kind === "unit" ? "units" : kind === "synergy" ? "synergies" : "items";
+  const folder = kind === "unit" ? "units" : "items";
   span.style.backgroundImage = `url("${import.meta.env.BASE_URL}assets/icons/${folder}/${index}.png")`;
   return span;
 }
@@ -22,7 +20,11 @@ export function unitArt(def: UnitDef, className = ""): HTMLSpanElement {
 }
 
 export function synergyArt(id: TraitId, className = ""): HTMLSpanElement {
-  return art("synergy", Math.max(0, traitIds.indexOf(id)), TRAITS[id].icon, className);
+  const span = document.createElement("span");
+  span.className = className;
+  span.textContent = TRAITS[id].icon;
+  span.setAttribute("aria-label", TRAITS[id].name);
+  return span;
 }
 
 export function itemArt(item: ItemDef, className = ""): HTMLSpanElement {
