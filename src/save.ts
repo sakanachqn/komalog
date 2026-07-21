@@ -35,6 +35,17 @@ export function loadGame(): SaveData | null {
     d.run.actRule ??= "bloodmoon";
     d.run.startedAt ??= Date.now();
     d.run.damageTaken ??= 0;
+    d.run.ancientRelics ??= [];
+    d.run.pendingAncientChoices ??= [];
+    // 旧セーブは所持数から第1・第2幕報酬の取得状況を推定
+    d.run.ancientRewardActs ??= d.run.ancientRelics.slice(0, 2).map((_, i) => i + 1);
+    d.run.carriedShopItems ??= [];
+    d.run.shopItemRerolls ??= 0;
+    d.run.shopRerollNodeId ??= null;
+    d.run.legacyRewarded ??= false;
+    d.run.potions ??= [];
+    d.run.scrap ??= 0;
+    for (const u of d.run.roster) u.hpBonus ??= 0;
     return d;
   } catch {
     return null;

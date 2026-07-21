@@ -9,14 +9,15 @@ import {
 } from "./battle";
 import type { BattleEvent, CombatUnit } from "./battle";
 import { enemyTeamFor } from "./data/enemies";
-import { CRAFT_RECIPES, ITEM_BY_ID, RELIC_BY_ID, rollItem, rollRelicChoices } from "./data/relics";
-import { TRAITS, UNIT_BY_ID, rollUnitDef } from "./data/units";
-import { clearSave, loadGame } from "./save";
+import { ANCIENT_RELIC_BY_ID, rollAncientRelicChoices } from "./data/ancientRelics";
+import { BASE_ITEM_IDS, CRAFT_RECIPES, ITEMS, ITEM_BY_ID, RELIC_BY_ID, craftResult, rollItem, rollRelicChoices } from "./data/relics";
+import { TRAITS, UNITS, UNIT_BY_ID, rollUnitDef } from "./data/units";
+import { clearSave, loadGame, saveGame } from "./save";
 import type { SaveData } from "./save";
 import { isMuted, sfx, toggleMute } from "./sound";
 import { ASC_LEVELS, MAX_ASC, ascMods } from "./ascension";
 import { ACT_RULE_BY_ID, rollActRule } from "./data/actrules";
-import { UNLOCK_INFO, bumpCounter, grantUnlock, hasUnlock, meta, saveMeta } from "./meta";
+import { LEGACY_UPGRADES, UNLOCK_INFO, bumpCounter, buyLegacy, grantUnlock, hasLegacy, hasUnlock, legacyLevel, meta, saveMeta } from "./meta";
 import { FLOOR_COUNT, NODE_META } from "./map";
 import { ctx, go } from "./router";
 import {
@@ -35,7 +36,8 @@ import {
   unitDef,
 } from "./state";
 import { generateMap } from "./map";
-import type { EnemyDef, MapNode, OwnedUnit, RunState, UnitDef } from "./types";
+import type { EnemyDef, MapNode, OwnedUnit, RunState, TraitId, UnitDef } from "./types";
+import { itemArt, synergyArt, unitArt } from "./artIcons";
 
 /* ================= ヘルパー ================= */
 
@@ -63,12 +65,25 @@ function hud(run: RunState): HTMLElement {
     el("span", "gold", `💰 ${run.gold}G`),
     el("span", "", `第${run.act}幕 ${Math.min(run.floorIndex + 1, FLOOR_COUNT)}/${FLOOR_COUNT}`),
   );
+  if (run.potions.length > 0) h.appendChild(el("span", "", `⚗️ ${run.potions.length}`));
+  if (run.scrap > 0) h.appendChild(el("span", "", `🔧 ${run.scrap}/5`));
   if (run.relics.length > 0) {
     const row = el("span", "relic-row");
     for (const id of run.relics) {
       const d = RELIC_BY_ID.get(id)!;
       const icon = el("span", "relic-icon", d.icon);
       icon.title = `${d.name}: ${d.desc}`;
+      row.appendChild(icon);
+    }
+    h.appendChild(row);
+  }
+  if (run.ancientRelics.length > 0) {
+    const row = el("span", "relic-row ancient-relic-row");
+    for (const id of run.ancientRelics) {
+      const d = ANCIENT_RELIC_BY_ID.get(id);
+      if (!d) continue;
+      const icon = el("span", "relic-icon ancient-relic-icon", d.icon);
+      icon.title = `エンシェントレリック「${d.name}」: ${d.desc}`;
       row.appendChild(icon);
     }
     h.appendChild(row);
@@ -128,8 +143,8 @@ function rosterStrip(run: RunState): HTMLElement {
     for (const u of units) {
       const d = unitDef(u);
       const chip = el("span", "rs-chip");
-      chip.append(el("span", "", d.icon), el("sup", "rs-star", "★".repeat(u.star)));
-      if (u.item) chip.appendChild(el("span", "rs-item", ITEM_BY_ID.get(u.item)!.icon));
+      chip.append(unitArt(d), el("sup", "rs-star", "★".repeat(u.star)));
+      if (u.item) chip.appendChild(itemArt(ITEM_BY_ID.get(u.item)!, "rs-item"));
       chip.title = `${d.name} ${"★".repeat(u.star)}${u.item ? ` / ${ITEM_BY_ID.get(u.item)!.name}` : ""}\n${d.traits.map((t) => TRAITS[t].icon + TRAITS[t].name).join(" ")}`;
       box.appendChild(chip);
     }
@@ -142,7 +157,8 @@ function rosterStrip(run: RunState): HTMLElement {
     box.appendChild(el("span", "rs-label", "🎒"));
     for (const id of run.items) {
       const d = ITEM_BY_ID.get(id)!;
-      const chip = el("span", "rs-chip", d.icon);
+      const chip = el("span", "rs-chip");
+      chip.appendChild(itemArt(d));
       chip.title = `${d.name}: ${d.desc}`;
       box.appendChild(chip);
     }
@@ -154,7 +170,7 @@ function rosterStrip(run: RunState): HTMLElement {
 function traitPanel(board: OwnedUnit[]): HTMLElement {
   const p = el("div", "panel");
   p.appendChild(el("h3", "", "シナジー"));
-  const statuses = computeTraits(board);
+  const statuses = computeTraits(board, ctx.run?.ancientRelics ?? []);
   if (statuses.length === 0) p.appendChild(el("div", "trait-row inactive", "ユニットを配置しよう"));
   for (const s of statuses) {
     const info = TRAITS[s.trait];
@@ -162,7 +178,9 @@ function traitPanel(board: OwnedUnit[]): HTMLElement {
 
     // 「⚔️ 戦士 (2/4/6):3」形式。達成済みの閾値だけ色を変える
     const label = el("span", "trait-name");
-    label.appendChild(el("span", "", `${info.icon} ${info.name}`));
+    const traitTitle = el("span");
+    traitTitle.append(synergyArt(s.trait), document.createTextNode(` ${info.name}`));
+    label.appendChild(traitTitle);
     const th = el("span", "trait-th");
     th.appendChild(el("span", "th-paren", "("));
     info.thresholds.forEach((t, i) => {
@@ -235,13 +253,19 @@ const HELP_HTML = `
   <ul>
     <li>ユニット1体につき<b>1つだけ</b>装備できる</li>
     <li>装備は🎒欄からドラッグ＆ドロップ、またはクリック→ユニットをクリック</li>
-    <li>同じアイテムが2つあると<b>⚒️合成ボタン</b>が出て、強力な上位アイテムになる</li>
+    <li>通常アイテムを合成工房の素材1・2へ<b>ドラッグ＆ドロップ</b>すると、組み合わせに応じた強力な上位アイテムになる</li>
   </ul>
 </section>
 <section>
   <h4>🏺 レリック</h4>
   <p>ラン全体に効き続ける永続強化。エリート撃破の報酬、ショップ、イベントで手に入る。
   所持中のレリックは画面上部にアイコンで並ぶ（カーソルを合わせると効果が見える）。</p>
+</section>
+<section>
+  <h4>✨ エンシェントレリック</h4>
+  <p><b>第1幕と第2幕のボス撃破後</b>に、3つの候補から1つだけ選べる特別な遺物。
+  配置上限を倍にする、特定シナジーの戦い方を変えるなど、通常レリックより強力で特殊な効果を持つ。
+  画面上部では輝く枠のアイコンで表示され、ラン終了まで変更できない。</p>
 </section>
 <section>
   <h4>🗺️ マップのノード</h4>
@@ -276,6 +300,11 @@ const HELP_HTML = `
   5・10・15・20段では特殊なバフも手に入る。腕試しにどうぞ。</p>
 </section>
 <section>
+  <h4>🔮 記憶の祭壇（恒久解放）</h4>
+  <p>HPが0になったとき、または第3幕をクリアしたとき、到達地点や勝利数に応じて<b>記憶の欠片</b>を獲得する。
+  タイトル画面の「記憶の祭壇」で、新ユニットやショップ機能、開始時ボーナスを恒久的に解放できる。</p>
+</section>
+<section>
   <h4>💡 コツ</h4>
   <ul>
     <li>序盤は安いユニットを3体集めて<b>★2</b>を作ると一気に強くなる</li>
@@ -308,6 +337,216 @@ export function showHelp() {
     if (e.target === overlay) close(); // 背景クリックで閉じる
   });
   document.addEventListener("keydown", onKey);
+  document.body.appendChild(overlay);
+}
+
+type CompendiumTab = "units" | "traits" | "items";
+
+/** タイトル・ラン中のどちらからでも開ける共通図鑑。 */
+export function showCompendium(initialTab: CompendiumTab = "units") {
+  const overlay = el("div", "modal-overlay");
+  const panel = el("div", "modal-panel compendium-panel");
+  const head = el("div", "modal-head");
+  head.append(el("h2", "", "📚 冒険図鑑"), btn("✕", "modal-close", () => close()));
+  const tabs = el("div", "compendium-tabs");
+  const body = el("div", "modal-body compendium-body");
+  const foot = el("div", "toolbar");
+  foot.appendChild(btn("閉じる", "primary", () => close()));
+  panel.append(head, tabs, body, foot);
+  overlay.appendChild(panel);
+
+  let active = initialTab;
+  let unitTraitFilter: TraitId | "all" = "all";
+  const renderUnits = () => {
+    const filterBar = el("div", "compendium-filter");
+    filterBar.appendChild(el("label", "", "シナジーで絞り込み"));
+    const select = el("select", "compendium-filter-select");
+    const allOption = el("option", "", `すべて（${UNITS.length}体）`);
+    allOption.value = "all";
+    select.appendChild(allOption);
+    for (const trait of Object.values(TRAITS)) {
+      const option = el("option", "", `${trait.icon} ${trait.name}`);
+      option.value = trait.id;
+      select.appendChild(option);
+    }
+    select.value = unitTraitFilter;
+    select.addEventListener("change", () => {
+      unitTraitFilter = select.value as TraitId | "all";
+      refresh();
+    });
+    filterBar.appendChild(select);
+    const filteredUnits = (unitTraitFilter === "all"
+      ? [...UNITS]
+      : UNITS.filter(
+          (def) => (!def.unlock || hasUnlock(def.unlock)) && def.traits.includes(unitTraitFilter as TraitId),
+        )).sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name, "ja"));
+    filterBar.appendChild(el("span", "filter-count", `${filteredUnits.length}体`));
+    body.appendChild(filterBar);
+    const unlockedUnits = filteredUnits.filter((def) => !def.unlock || hasUnlock(def.unlock));
+    const lockedUnits = filteredUnits.filter((def) => def.unlock && !hasUnlock(def.unlock));
+    for (const cost of [1, 2, 3, 4, 5] as const) {
+      const costUnits = unlockedUnits.filter((def) => def.cost === cost);
+      if (costUnits.length === 0) continue;
+      const section = el("section", `unit-cost-section cost-${cost}`);
+      const heading = el("div", "unit-cost-heading");
+      heading.append(
+        el("span", "unit-cost-label", `コスト ${cost}`),
+        el("span", "unit-cost-dots", "◆".repeat(cost)),
+        el("span", "unit-cost-count", `${costUnits.length}体`),
+      );
+      section.appendChild(heading);
+      const grid = el("div", "compendium-grid unit-compendium-grid");
+      for (const def of costUnits) {
+        const unlocked = !def.unlock || hasUnlock(def.unlock);
+        const card = el("div", `compendium-card unit-entry${unlocked ? "" : " undiscovered"}`);
+        if (!unlocked) {
+          const legacy = LEGACY_UPGRADES.find((x) => x.id === def.unlock);
+          const condition = legacy ? `記憶の祭壇: ${legacy.name}` : UNLOCK_INFO[def.unlock!]?.cond ?? "未知の条件";
+          card.innerHTML = `<span class="compendium-icon">🔒</span><b>${def.name}</b><small>未解放<br>${condition}</small>`;
+        } else {
+          card.innerHTML =
+            `<span class="compendium-icon"></span><b>${def.name} <em>コスト${def.cost}</em></b>` +
+            `<small>${def.traits.map((t) => `${TRAITS[t].icon}${TRAITS[t].name}`).join("　")}</small>` +
+            `<span class="compendium-stats">HP ${def.hp}　攻撃 ${def.atk}　防御 ${def.armor}<br>速度 ${def.atkSpeed.toFixed(2)}　射程 ${rangeLabel(def.range)}</span>` +
+            `<span class="compendium-skill"><b>${def.skill.name}</b>　${def.skill.desc}<br>必要マナ ${def.skill.mana}</span>`;
+          card.querySelector(".compendium-icon")!.appendChild(unitArt(def));
+        }
+        grid.appendChild(card);
+      }
+      section.appendChild(grid);
+      body.appendChild(section);
+    }
+    if (lockedUnits.length > 0) {
+      const section = el("section", "unit-cost-section locked-unit-section");
+      const heading = el("div", "unit-cost-heading locked-unit-heading");
+      heading.append(
+        el("span", "unit-cost-label", "🔒 未解放"),
+        el("span", "unit-cost-count", `${lockedUnits.length}体`),
+      );
+      section.appendChild(heading);
+      const grid = el("div", "compendium-grid unit-compendium-grid");
+      for (const def of lockedUnits) {
+        const legacy = LEGACY_UPGRADES.find((x) => x.id === def.unlock);
+        const condition = legacy ? `記憶の祭壇: ${legacy.name}` : UNLOCK_INFO[def.unlock!]?.cond ?? "未知の条件";
+        const card = el("div", "compendium-card unit-entry undiscovered");
+        card.innerHTML =
+          `<span class="compendium-icon">🔒</span><b>${def.name} <em>コスト${def.cost}</em></b>` +
+          `<small>未解放<br>${condition}</small>`;
+        grid.appendChild(card);
+      }
+      section.appendChild(grid);
+      body.appendChild(section);
+    }
+  };
+  const renderTraits = () => {
+    const grid = el("div", "compendium-grid trait-compendium-grid");
+    for (const trait of Object.values(TRAITS)) {
+      const card = el("div", "compendium-card trait-entry");
+      card.innerHTML = `<span class="compendium-icon"></span><b>${trait.name}</b><small>発動閾値: ${trait.thresholds.join(" / ")}</small>`;
+      card.querySelector(".compendium-icon")!.appendChild(synergyArt(trait.id));
+      const levels = el("div", "trait-level-list");
+      trait.thresholds.forEach((threshold, i) => {
+        levels.appendChild(el("div", "", `<${threshold}体> ${trait.desc(i + 1)}`));
+      });
+      card.appendChild(levels);
+      grid.appendChild(card);
+    }
+    body.appendChild(grid);
+  };
+  const renderItems = () => {
+    for (const section of [
+      { title: "通常アイテム", list: ITEMS.filter((x) => !x.tier) },
+      { title: "合成アイテム", list: ITEMS.filter((x) => x.tier === 2) },
+    ]) {
+      body.appendChild(el("h3", "compendium-section-title", section.title));
+      const grid = el("div", "compendium-grid item-compendium-grid");
+      for (const item of section.list) {
+        const card = el("div", "compendium-card item-entry");
+        card.innerHTML = `<span class="compendium-icon"></span><b>${item.name}</b><small>${item.desc}</small>`;
+        card.querySelector(".compendium-icon")!.appendChild(itemArt(item));
+        if (item.tier === 2) {
+          const materials = Object.entries(CRAFT_RECIPES).find(([, result]) => result === item.id)?.[0].split("+");
+          if (materials?.length === 2) {
+            const a = ITEM_BY_ID.get(materials[0])!;
+            const b = ITEM_BY_ID.get(materials[1])!;
+            card.appendChild(el("span", "recipe", `合成: ${a.icon} ${a.name} ＋ ${b.icon} ${b.name}`));
+          }
+        }
+        grid.appendChild(card);
+      }
+      body.appendChild(grid);
+    }
+  };
+  const refresh = () => {
+    tabs.innerHTML = "";
+    body.innerHTML = "";
+    for (const tab of [
+      { id: "units" as const, label: `⚔️ ユニット ${UNITS.length}` },
+      { id: "traits" as const, label: `🔗 シナジー ${Object.keys(TRAITS).length}` },
+      { id: "items" as const, label: `🎒 アイテム ${ITEMS.length}` },
+    ]) {
+      tabs.appendChild(btn(tab.label, active === tab.id ? "active" : "", () => { active = tab.id; refresh(); }));
+    }
+    if (active === "units") renderUnits();
+    else if (active === "traits") renderTraits();
+    else renderItems();
+    body.scrollTop = 0;
+  };
+  const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+  function close() {
+    overlay.remove();
+    document.removeEventListener("keydown", onKey);
+  }
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  document.addEventListener("keydown", onKey);
+  refresh();
+  document.body.appendChild(overlay);
+}
+
+/** ランをまたいで効果が残る恒久解放ショップ。 */
+function showLegacySanctum() {
+  const overlay = el("div", "modal-overlay");
+  const panel = el("div", "modal-panel legacy-panel");
+  const head = el("div", "modal-head");
+  const title = el("h2", "", "🔮 記憶の祭壇");
+  const balance = el("div", "memory-balance");
+  head.append(title, balance, btn("✕", "modal-close", () => close()));
+  const body = el("div", "modal-body legacy-grid");
+  const foot = el("div", "toolbar");
+  foot.appendChild(btn("閉じる", "primary", () => close()));
+  panel.append(head, body, foot);
+  overlay.appendChild(panel);
+
+  const refresh = () => {
+    const m = meta();
+    balance.textContent = `🔹 ${m.memoryShards}`;
+    body.innerHTML = "";
+    for (const up of LEGACY_UPGRADES) {
+      const owned = hasLegacy(up.id);
+      const prereq = up.requires ? LEGACY_UPGRADES.find((x) => x.id === up.requires) : undefined;
+      const blocked = Boolean(prereq && !hasLegacy(prereq.id));
+      const card = el("div", `legacy-card${owned ? " owned" : ""}${blocked ? " locked" : ""}`);
+      card.innerHTML = `<span class="legacy-icon">${owned ? "✅" : up.icon}</span><b>${up.name}</b><small>${up.desc}</small>`;
+      const action = btn(owned ? "解放済み" : blocked ? `前提: ${prereq!.name}` : `🔹 ${up.cost}`, "", () => {
+        if (buyLegacy(up.id)) {
+          sfx.craft();
+          refresh();
+        }
+      });
+      action.disabled = owned || blocked || m.memoryShards < up.cost;
+      card.appendChild(action);
+      body.appendChild(card);
+    }
+  };
+  const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+  function close() {
+    overlay.remove();
+    document.removeEventListener("keydown", onKey);
+    go({ kind: "title" });
+  }
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  document.addEventListener("keydown", onKey);
+  refresh();
   document.body.appendChild(overlay);
 }
 
@@ -355,33 +594,41 @@ export function renderTitle(): HTMLElement {
     stats.textContent = `📜 ${parts.join(" ／ ")}`;
     s.appendChild(stats);
   }
+  s.appendChild(el("div", "memory-balance", `🔹 記憶の欠片 ${m.memoryShards}`));
+  const compendiumButton = btn("📚 図鑑", "title-compendium", () => showCompendium());
+  s.appendChild(compendiumButton);
 
   const save = loadGame();
-  const bar = el("div", "toolbar");
+  const actions = el("div", "title-actions");
+  const playRow = el("div", "toolbar title-action-row");
   if (save) {
-    bar.appendChild(
+    playRow.appendChild(
       btn(`▶ 続きから（第${save.run.act}幕 フロア${save.run.floorIndex + 1}）`, "primary", () => {
         ctx.run = save.run;
         ctx.battleSpeed = save.battleSpeed || 1;
         resumeFrom(save);
       }),
     );
-    bar.appendChild(
+    playRow.appendChild(
       btn("最初から", "", () => {
         clearSave();
         go({ kind: "starter" });
       }),
     );
   } else {
-    bar.appendChild(btn("ランを開始", "primary", () => go({ kind: "starter" })));
+    playRow.appendChild(btn("ランを開始", "primary", () => go({ kind: "starter" })));
   }
-  bar.appendChild(btn("📖 遊び方", "", () => showHelp()));
-  bar.appendChild(
+  const sanctuaryRow = el("div", "toolbar title-action-row");
+  sanctuaryRow.appendChild(btn("🔮 記憶の祭壇", "", () => showLegacySanctum()));
+  const infoRow = el("div", "toolbar title-action-row");
+  infoRow.appendChild(btn("📖 遊び方", "", () => showHelp()));
+  infoRow.appendChild(
     btn("💬 感想を送る", "", () => {
       window.open(FEEDBACK_FORM_URL, "_blank", "noopener,noreferrer");
     }),
   );
-  s.appendChild(bar);
+  actions.append(playRow, sanctuaryRow, infoRow);
+  s.appendChild(actions);
   return s;
 }
 
@@ -519,7 +766,7 @@ export function renderStarter(): HTMLElement {
   s.appendChild(el("div", "sub", "最初の部隊がビルドの方向性を決める："));
   const unlocked = STARTERS.filter((st) => !st.unlock || hasUnlock(st.unlock));
   const locked = STARTERS.filter((st) => st.unlock && !hasUnlock(st.unlock));
-  const pool = [...unlocked].sort(() => Math.random() - 0.5).slice(0, 3);
+  const pool = [...unlocked].sort(() => Math.random() - 0.5).slice(0, hasLegacy("starter_choice") ? 4 : 3);
   const row = el("div", "card-row");
   for (const st of pool) {
     const card = el("button", "option-card");
@@ -680,6 +927,8 @@ export function renderPrepare(node: MapNode): HTMLElement {
   let selected: number | null = null; // iid
   let selectedEnemy: number | null = null; // ctx.enemyTeam.spawns のインデックス
   let selectedItem: number | null = null; // run.items のインデックス
+  let craftMaterialA: string | null = null;
+  let craftMaterialB: string | null = null;
   let justDragged = false; // ドラッグ直後のclickイベントを無視するためのフラグ
 
   const s = el("div");
@@ -802,6 +1051,18 @@ export function renderPrepare(node: MapNode): HTMLElement {
     refresh();
   }
 
+  function setCraftMaterial(slot: "a" | "b", itemId: string) {
+    if (!BASE_ITEM_IDS.includes(itemId as (typeof BASE_ITEM_IDS)[number])) {
+      hint.textContent = "⚠️ 合成済みアイテムは素材にできない";
+      return;
+    }
+    if (slot === "a") craftMaterialA = itemId;
+    else craftMaterialB = itemId;
+    selectedItem = null;
+    selected = null;
+    refresh();
+  }
+
   /** アイテムチップのドラッグ（ユニットへドロップで装備） */
   function enableItemDrag(elm: HTMLElement, itemIdx: number) {
     elm.addEventListener("pointerdown", (e) => {
@@ -820,6 +1081,8 @@ export function renderPrepare(node: MapNode): HTMLElement {
         }
         ghost.style.left = `${ev.clientX}px`;
         ghost.style.top = `${ev.clientY}px`;
+        document.querySelectorAll(".craft-material-slot.drag-over").forEach((x) => x.classList.remove("drag-over"));
+        document.elementFromPoint(ev.clientX, ev.clientY)?.closest(".craft-material-slot")?.classList.add("drag-over");
       };
       const onUp = (ev: PointerEvent) => {
         window.removeEventListener("pointermove", onMove);
@@ -827,9 +1090,15 @@ export function renderPrepare(node: MapNode): HTMLElement {
         if (!ghost) return;
         ghost.remove();
         elm.classList.remove("dragging");
+        document.querySelectorAll(".craft-material-slot.drag-over").forEach((x) => x.classList.remove("drag-over"));
         justDragged = true;
         setTimeout(() => (justDragged = false), 50);
         const target = document.elementFromPoint(ev.clientX, ev.clientY);
+        const craftSlot = target?.closest<HTMLElement>(".craft-material-slot");
+        if (craftSlot?.dataset.craftSlot) {
+          setCraftMaterial(craftSlot.dataset.craftSlot as "a" | "b", run.items[itemIdx]);
+          return;
+        }
         const holder =
           target?.closest<HTMLElement>(".unit") ?? target?.closest<HTMLElement>(".bench-slot");
         if (holder?.dataset.iid) equipItem(itemIdx, Number(holder.dataset.iid));
@@ -877,10 +1146,13 @@ export function renderPrepare(node: MapNode): HTMLElement {
       const pos = cellPos(ou.pos!.x, ou.pos!.y);
       u.style.left = pos.left;
       u.style.top = pos.top;
-      u.append(el("div", "stars", starsText(ou.star)), el("div", "icon", def.icon));
+      const unitIcon = el("div", "icon");
+      unitIcon.appendChild(unitArt(def));
+      u.append(el("div", "stars", starsText(ou.star)), unitIcon);
       if (ou.item) {
         const d = ITEM_BY_ID.get(ou.item)!;
-        const badge = el("div", "item-badge", d.icon);
+        const badge = el("div", "item-badge");
+        badge.appendChild(itemArt(d));
         badge.title = `${d.name}: ${d.desc}`;
         u.appendChild(badge);
       }
@@ -902,10 +1174,13 @@ export function renderPrepare(node: MapNode): HTMLElement {
         const def = unitDef(ou);
         slot.dataset.iid = String(ou.iid);
         if (ou.iid === selected) slot.classList.add("selected");
-        slot.append(el("div", "icon", def.icon), el("div", "stars", starsText(ou.star)));
+        const benchIcon = el("div", "icon");
+        benchIcon.appendChild(unitArt(def));
+        slot.append(benchIcon, el("div", "stars", starsText(ou.star)));
         if (ou.item) {
           const d = ITEM_BY_ID.get(ou.item)!;
-          const badge = el("div", "item-badge", d.icon);
+          const badge = el("div", "item-badge");
+          badge.appendChild(itemArt(d));
           badge.title = `${d.name}: ${d.desc}`;
           slot.appendChild(badge);
         }
@@ -925,8 +1200,9 @@ export function renderPrepare(node: MapNode): HTMLElement {
     }
     run.items.forEach((id, idx) => {
       const d = ITEM_BY_ID.get(id)!;
-      const chip = el("button", "item-chip", d.icon);
-      chip.title = `${d.name}: ${d.desc}\nドラッグかクリックでユニットに装備`;
+      const chip = el("button", "item-chip");
+      chip.appendChild(itemArt(d));
+      chip.title = `${d.name}: ${d.desc}\nユニットまたは合成素材スロットへドラッグ`;
       if (idx === selectedItem) chip.classList.add("selected");
       chip.addEventListener("click", () => {
         if (justDragged) return;
@@ -939,46 +1215,87 @@ export function renderPrepare(node: MapNode): HTMLElement {
     });
     boardHolder.appendChild(itemBar);
 
-    // 合成: 在庫に同じ素材が2個以上あれば合成ボタンを出す
+    // 合成工房: 通常アイテムを2つ選び、完成品を確認して合成
     const counts = new Map<string, number>();
     for (const id of run.items) counts.set(id, (counts.get(id) ?? 0) + 1);
-    const craftable = [...counts.entries()].filter(
-      ([id, c]) => c >= 2 && CRAFT_RECIPES[id] !== undefined,
-    );
-    if (craftable.length > 0) {
-      const craftBar = el("div", "item-bar");
-      craftBar.appendChild(el("span", "item-bar-label", "⚒️"));
-      for (const [id] of craftable) {
-        const base = ITEM_BY_ID.get(id)!;
-        const up = ITEM_BY_ID.get(CRAFT_RECIPES[id])!;
-        const b = el("button", "craft-btn", `${base.icon}×2 → ${up.icon} ${up.name}`);
-        b.title = `合成: ${up.name}（${up.desc}）`;
-        b.addEventListener("click", () => {
-          if (justDragged) return;
-          let removed = 0;
-          run.items = run.items.filter((x) => {
-            if (x === id && removed < 2) {
-              removed++;
-              return false;
-            }
-            return true;
-          });
-          run.items.push(CRAFT_RECIPES[id]);
+    const availableBases = BASE_ITEM_IDS.filter((id) => (counts.get(id) ?? 0) > 0);
+    if (availableBases.length > 0) {
+      if (craftMaterialA && !availableBases.includes(craftMaterialA as (typeof BASE_ITEM_IDS)[number])) craftMaterialA = null;
+      if (craftMaterialB && !availableBases.includes(craftMaterialB as (typeof BASE_ITEM_IDS)[number])) craftMaterialB = null;
+      const workbench = el("div", "craft-workbench");
+      const craftHead = el("div", "craft-workbench-head");
+      craftHead.append(el("b", "", "⚒️ 合成工房"), el("small", "", "通常アイテムを2つ選択"));
+      workbench.appendChild(craftHead);
+      const controls = el("div", "craft-controls");
+      const makeSlot = (current: string | null, slot: "a" | "b") => {
+        const box = el("button", `craft-material-slot${current ? " filled" : ""}`);
+        box.dataset.craftSlot = slot;
+        if (current) {
+          const item = ITEM_BY_ID.get(current)!;
+          box.append(itemArt(item), el("b", "", item.name), el("small", "", "クリックで外す"));
+          box.title = `${item.name}: ${item.desc}\n別の素材をドロップすると入れ替え`;
+        } else {
+          box.innerHTML = `<span>＋</span><b>素材${slot === "a" ? "1" : "2"}</b><small>ここへドロップ</small>`;
+        }
+        box.addEventListener("click", () => {
+          if (selectedItem !== null) {
+            setCraftMaterial(slot, run.items[selectedItem]);
+            return;
+          }
+          if (slot === "a") craftMaterialA = null;
+          else craftMaterialB = null;
+          refresh();
+        });
+        return box;
+      };
+      controls.append(makeSlot(craftMaterialA, "a"), el("span", "craft-plus", "＋"), makeSlot(craftMaterialB, "b"));
+      workbench.appendChild(controls);
+
+      const enoughMaterials = Boolean(
+        craftMaterialA && craftMaterialB &&
+        (craftMaterialA !== craftMaterialB || (counts.get(craftMaterialA) ?? 0) >= 2),
+      );
+      const resultId = craftMaterialA && craftMaterialB && enoughMaterials
+        ? craftResult(craftMaterialA, craftMaterialB)
+        : undefined;
+      const result = el("div", `craft-preview${resultId ? " ready" : ""}`);
+      if (resultId) {
+        const up = ITEM_BY_ID.get(resultId)!;
+        const resultText = el("span");
+        resultText.append(el("b", "", up.name), el("small", "", up.desc));
+        result.append(itemArt(up, "craft-result-icon"), resultText);
+        const craftButton = btn("合成する", "craft-btn", () => {
+          const a = craftMaterialA!;
+          const b = craftMaterialB!;
+          const removeOne = (id: string) => {
+            const index = run.items.indexOf(id);
+            if (index >= 0) run.items.splice(index, 1);
+          };
+          removeOne(a);
+          removeOne(b);
+          run.items.push(resultId);
           selectedItem = null;
+          craftMaterialA = null;
+          craftMaterialB = null;
           let text = `⚒️ ${up.icon} ${up.name} を合成した！（${up.desc}）`;
-          // アセンションLv5「鍛冶の心得」: 50%で素材が1個残る
           if (ascMods(run.asc).craftSalvage && Math.random() < 0.5) {
-            run.items.push(id);
-            text += " 鍛冶の心得で素材が1個残った！";
+            const salvaged = Math.random() < 0.5 ? a : b;
+            run.items.push(salvaged);
+            text += ` 鍛冶の心得で${ITEM_BY_ID.get(salvaged)!.name}が残った！`;
           }
           hint.textContent = text;
           bumpCounter("crafts");
           sfx.craft();
           refresh();
         });
-        craftBar.appendChild(b);
+        result.appendChild(craftButton);
+      } else {
+        result.textContent = craftMaterialA === craftMaterialB && craftMaterialA
+          ? "同じ素材を合成するには2個必要"
+          : "素材を2つ選ぶと完成品を表示";
       }
-      boardHolder.appendChild(craftBar);
+      workbench.appendChild(result);
+      boardHolder.appendChild(workbench);
     }
 
     // ツールバー
@@ -1060,13 +1377,15 @@ function unitInfoPanel(ou: OwnedUnit, onSell: () => void, onUnequip?: () => void
   // シナジー・アイテム・レリック込みの実効ステータス（戦闘と同じ計算）
   const cu = previewAllyStats(run, ou);
   const p = el("div", "panel unit-info");
-  p.appendChild(el("h3", "", `${def.icon} ${def.name} ${starsText(ou.star)}`));
+  const title = el("h3");
+  title.append(unitArt(def), document.createTextNode(` ${def.name} ${starsText(ou.star)}`));
+  p.appendChild(title);
   statRows(p, [
     ["HP", cu.shield > 0 ? `${cu.maxHp}（🛡+${cu.shield}）` : String(cu.maxHp)],
     ["攻撃力", String(cu.atk)],
     ["攻撃速度", cu.atkSpeed.toFixed(2)],
     ["クリティカル率", `${Math.round(cu.critChance * 100)}%`],
-    ["クリティカルダメージ", `${Math.round(CRIT_MULT * 100)}%`],
+    ["クリティカルダメージ", `${Math.round(cu.critMult * 100)}%`],
     ["射程", rangeLabel(cu.range)],
     ["防御", String(cu.armor)],
     ["開始マナ", `${cu.mana} / ${cu.maxMana}`],
@@ -1078,7 +1397,7 @@ function unitInfoPanel(ou: OwnedUnit, onSell: () => void, onUnequip?: () => void
   if (ou.item) {
     const d = ITEM_BY_ID.get(ou.item)!;
     const itemRow = el("div", "skill");
-    itemRow.innerHTML = `装備: <b>${d.icon} ${d.name}</b><br>${d.desc}`;
+    itemRow.append(document.createTextNode("装備: "), itemArt(d), document.createTextNode(` ${d.name}`), document.createElement("br"), document.createTextNode(d.desc));
     p.appendChild(itemRow);
   }
   const sellValue = def.cost * (ou.star === 1 ? 1 : ou.star === 2 ? 3 : 9);
@@ -1141,7 +1460,12 @@ export function renderBattle(node: MapNode): HTMLElement {
     u.style.left = pos.left;
     u.style.top = pos.top;
     u.title = cu.name;
-    u.append(el("div", "stars", cu.side === "ally" ? starsText(cu.star) : ""), el("div", "icon", cu.icon));
+    const combatIcon = el("div", "icon", cu.icon);
+    if (cu.side === "ally") {
+      const def = UNITS.find((candidate) => candidate.name === cu.name);
+      if (def) { combatIcon.textContent = ""; combatIcon.appendChild(unitArt(def)); }
+    }
+    u.append(el("div", "stars", cu.side === "ally" ? starsText(cu.star) : ""), combatIcon);
     const bars = el("div", "bars");
     const hpBar = el("div", "bar hp");
     const hpFill = el("i", "fill-hp");
@@ -1197,6 +1521,10 @@ export function renderBattle(node: MapNode): HTMLElement {
       setTimeout(() => {
         root.style.opacity = "0";
       }, 600);
+    }
+    if (cu.alive && e.root.classList.contains("dead")) {
+      e.root.classList.remove("dead");
+      e.root.style.opacity = "1";
     }
   }
 
@@ -1382,6 +1710,8 @@ export function renderBattle(node: MapNode): HTMLElement {
   }
 
   function finish(res: "win" | "lose") {
+    battle.settleRunRewards(run, res === "win");
+    if (res === "win" && battle.bonusGold > 0) run.gold += battle.bonusGold;
     if (res === "win") {
       run.battleCount++;
       bumpCounter("battleWins");
@@ -1505,11 +1835,8 @@ function buildResult(node: MapNode, win: boolean, hpLost: number): HTMLElement {
   s.appendChild(rosterStrip(run));
   const gf = globalFloor(run);
   const maxed = maxedDefIds(run);
-  const choices: UnitDef[] = [
-    rollUnitDef(gf, maxed),
-    rollUnitDef(gf, maxed),
-    rollUnitDef(gf, maxed),
-  ];
+  const rewardChoiceCount = hasLegacy("reward_choice") ? 4 : 3;
+  const choices: UnitDef[] = Array.from({ length: rewardChoiceCount }, () => rollUnitDef(gf, maxed));
   const row = el("div", "card-row");
   const msg = el("div", "sub", "");
   for (const def of choices) {
@@ -1532,8 +1859,10 @@ function buildResult(node: MapNode, win: boolean, hpLost: number): HTMLElement {
 
 function unitCard(def: UnitDef, action: string, onClick: () => void): HTMLElement {
   const c = el("button", `unit-card cost-${def.cost}`);
+  const icon = el("div", "icon");
+  icon.appendChild(unitArt(def));
   c.append(
-    el("div", "icon", def.icon),
+    icon,
     el("div", "name", `${def.name}`),
     el("div", "cost", `コスト ${def.cost}`),
     el("div", "traits", def.traits.map((t) => `${TRAITS[t].icon}${TRAITS[t].name}`).join(" ")),
@@ -1547,7 +1876,7 @@ function unitCard(def: UnitDef, action: string, onClick: () => void): HTMLElemen
 
 /* ================= ショップ ================= */
 
-export function renderShop(_node: MapNode, rescue = false): HTMLElement {
+export function renderShop(node: MapNode, rescue = false): HTMLElement {
   const run = ctx.run!;
   // 救済ショップ（ボス敗北後の闇商人）は割高。アセンション・幕の掟の割増も加算
   const markup =
@@ -1574,7 +1903,15 @@ export function renderShop(_node: MapNode, rescue = false): HTMLElement {
   center.appendChild(stripHolder);
 
   let offers: (UnitDef | null)[] = rollOffers();
-  const itemOffers: (string | null)[] = [rollItem(), rollItem()];
+  const itemRerollMax = legacyLevel("item_reroll_");
+  const shopKey = run.act * 1000 + node.id + (rescue ? 500 : 0);
+  if (run.shopRerollNodeId !== shopKey) {
+    run.shopRerollNodeId = shopKey;
+    run.shopItemRerolls = itemRerollMax;
+  }
+  let itemOffers: (string | null)[] = run.carriedShopItems.slice(0, 2);
+  run.carriedShopItems = [];
+  while (itemOffers.length < 2) itemOffers.push(rollItem());
   const relicGuaranteed = rescue || (ACT_RULE_BY_ID.get(run.actRule)?.e.shopRelic ?? false);
   let relicOffer: string | null =
     relicGuaranteed || Math.random() < 0.35 ? (rollRelicChoices(run.relics, 1)[0]?.id ?? null) : null;
@@ -1597,7 +1934,9 @@ export function renderShop(_node: MapNode, rescue = false): HTMLElement {
       if (!id) continue;
       const d = ITEM_BY_ID.get(id)!;
       const card = el("button", "option-card");
-      card.innerHTML = `<span class="icon">${d.icon}</span><b>${d.name}</b><br>${d.desc}<br><span class="gold-text">💰 ${itemPrice}G</span>`;
+      const shopIcon = el("span", "icon");
+      shopIcon.appendChild(itemArt(d));
+      card.append(shopIcon, el("b", "", d.name), document.createElement("br"), document.createTextNode(d.desc), document.createElement("br"), el("span", "gold-text", `💰 ${itemPrice}G`));
       card.addEventListener("click", () => {
         if (run.gold < itemPrice) {
           msg.textContent = "⚠️ ゴールドが足りない！";
@@ -1663,7 +2002,24 @@ export function renderShop(_node: MapNode, rescue = false): HTMLElement {
         offers = rollOffers();
         rerenderAll();
       }),
-      btn("マップへ戻る", "primary", () => go({ kind: "map" })),
+      ...(itemRerollMax > 0
+        ? [btn(`🔄 アイテム更新（残り${run.shopItemRerolls}回）`, "", () => {
+            if (run.shopItemRerolls <= 0) {
+              msg.textContent = "⚠️ このショップでのアイテム更新は使い切った";
+              return;
+            }
+            run.shopItemRerolls--;
+            itemOffers = [rollItem(), rollItem()];
+            saveGame({ v: 1, run, battleSpeed: ctx.battleSpeed, resume: { kind: "shop", nodeId: node.id, rescue } });
+            sfx.craft();
+            rerenderAll();
+          })]
+        : []),
+      btn("マップへ戻る", "primary", () => {
+        const carryCount = legacyLevel("item_carry_");
+        run.carriedShopItems = itemOffers.filter((id): id is string => id !== null).slice(0, carryCount);
+        go({ kind: "map" });
+      }),
     );
   }
 
@@ -1935,26 +2291,72 @@ export function renderActClear(clearedAct: number): HTMLElement {
   if (clearedAct === 1) grantUnlock("reach_act2");
   if (clearedAct === 2) grantUnlock("beat_dragon");
   const s = el("div", "center-screen");
-  s.appendChild(el("h2", "", `🏆 第${clearedAct}幕 クリア！`));
-  s.appendChild(
-    el(
-      "div",
-      "sub",
-      `第${clearedAct}幕の主を打ち倒した！\n報酬: 💰 20G ＋ ❤️ HP 15回復\n\nだが旅はまだ終わらない…さらなる強敵が待ち受ける。`,
-    ),
-  );
-  s.appendChild(
-    btn(`第${clearedAct + 1}幕へ進む`, "primary", () => {
-      run.gold += 20;
-      run.playerHp = Math.min(run.playerMaxHp, run.playerHp + 15);
-      run.act = clearedAct + 1;
-      run.floorIndex = 0;
-      run.currentNodeId = null;
-      run.map = generateMap();
-      run.actRule = rollActRule(); // 新しい幕の掟
-      go({ kind: "map" });
-    }),
-  );
+  const persist = () =>
+    saveGame({
+      v: 1,
+      run,
+      battleSpeed: ctx.battleSpeed,
+      resume: { kind: "actclear", clearedAct },
+    });
+
+  const proceed = () => {
+    run.pendingAncientChoices = [];
+    run.gold += 20;
+    run.playerHp = Math.min(run.playerMaxHp, run.playerHp + 15);
+    run.act = clearedAct + 1;
+    run.floorIndex = 0;
+    run.currentNodeId = null;
+    run.map = generateMap();
+    run.actRule = rollActRule();
+    go({ kind: "map" });
+  };
+
+  const render = () => {
+    s.innerHTML = "";
+    s.appendChild(el("h2", "", `🏆 第${clearedAct}幕 クリア！`));
+    s.appendChild(
+      el("div", "sub", `第${clearedAct}幕の主を打ち倒した！\n報酬: 💰 20G ＋ ❤️ HP 15回復`),
+    );
+
+    const alreadyClaimed = run.ancientRewardActs.includes(clearedAct);
+    if (!alreadyClaimed) {
+      if (run.pendingAncientChoices.length === 0) {
+        run.pendingAncientChoices = rollAncientRelicChoices(run.ancientRelics, 3).map((r) => r.id);
+        persist();
+      }
+      s.appendChild(el("h3", "ancient-heading", "✨ エンシェントレリックを1つ選ぼう"));
+      s.appendChild(el("div", "sub", "通常のレリックを超える、強力で特殊な遺物。選択はラン終了まで変更できない。"));
+      const row = el("div", "card-row ancient-choice-row");
+      for (const id of run.pendingAncientChoices) {
+        const relic = ANCIENT_RELIC_BY_ID.get(id);
+        if (!relic) continue;
+        const card = el("button", "option-card ancient-card");
+        card.innerHTML = `<span class="icon">${relic.icon}</span><b>${relic.name}</b><br><span>${relic.desc}</span>`;
+        card.addEventListener("click", () => {
+          run.ancientRelics.push(relic.id);
+          run.ancientRewardActs.push(clearedAct);
+          run.pendingAncientChoices = [];
+          persist();
+          sfx.craft();
+          render();
+        });
+        row.appendChild(card);
+      }
+      s.appendChild(row);
+      return;
+    }
+
+    const obtained = ANCIENT_RELIC_BY_ID.get(run.ancientRelics[run.ancientRelics.length - 1]);
+    if (obtained) {
+      const result = el("div", "ancient-obtained");
+      result.innerHTML = `<span>${obtained.icon}</span><b>${obtained.name}</b><small>${obtained.desc}</small>`;
+      s.appendChild(result);
+    }
+    s.appendChild(el("div", "sub", "だが旅はまだ終わらない…さらなる強敵が待ち受ける。"));
+    s.appendChild(btn(`第${clearedAct + 1}幕へ進む`, "primary", proceed));
+  };
+
+  render();
   return s;
 }
 
@@ -1968,8 +2370,16 @@ function fmtTime(ms: number): string {
 export function renderGameover(win: boolean): HTMLElement {
   const run = ctx.run!;
   const s = el("div", "center-screen");
+  const m = meta();
+  let earnedShards = 0;
+  if (!run.legacyRewarded) {
+    const progress = (run.act - 1) * 10 + run.floorIndex + 1;
+    earnedShards = 5 + progress + run.battleCount * 2 + run.asc * 2 + (win ? 35 : 0);
+    m.memoryShards += earnedShards;
+    run.legacyRewarded = true;
+    saveMeta();
+  }
   if (win) {
-    const m = meta();
     const clearMs = Date.now() - run.startedAt;
     const isBestTime = m.records.bestClearMs === null || clearMs < m.records.bestClearMs;
     m.records.totalWins++;
@@ -2004,6 +2414,11 @@ export function renderGameover(win: boolean): HTMLElement {
         `第${run.act}幕 フロア ${run.floorIndex + 1} で冒険は終わった。戦闘勝利数: ${run.battleCount}`,
       ),
     );
+  }
+  if (earnedShards > 0) {
+    const reward = el("div", "memory-reward");
+    reward.innerHTML = `<b>🔹 記憶の欠片 +${earnedShards}</b><small>到達地点・戦闘勝利数・挑戦段位から算出（所持 ${m.memoryShards}）</small>`;
+    s.appendChild(reward);
   }
   s.appendChild(btn("タイトルへ戻る", "primary", () => go({ kind: "title" })));
   return s;

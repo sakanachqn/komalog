@@ -7,7 +7,20 @@ export type TraitId =
   | "berserker"
   | "priest"
   | "undead"
-  | "spirit";
+  | "spirit"
+  | "resonator"
+  | "clockwork"
+  | "parasite"
+  | "gravity"
+  | "alchemist"
+  | "gambler"
+  | "ghost"
+  | "doppelganger"
+  | "commander"
+  | "bloodpact"
+  | "constellation"
+  | "dismantler"
+  | "jester";
 
 export type SkillType =
   | "nuke" // 対象に魔法ダメージ
@@ -31,7 +44,32 @@ export type SkillType =
   | "rally" // 味方全体にシールド
   | "frenzy" // 自己強化（攻撃速度・クリ率）
   | "manaburn" // 対象にダメージ+マナ枯渇
-  | "freeze"; // 対象周辺にダメージ+凍結（行動不能）
+  | "freeze" // 対象周辺にダメージ+凍結（行動不能）
+  | "silenceWave"
+  | "shieldBreak"
+  | "bloodPoison"
+  | "mirrorStrike"
+  | "gravityField"
+  | "linkedHeal"
+  | "diceExecute"
+  | "spectralDash"
+  | "allyCopy"
+  | "damageBanner"
+  | "bloodLine"
+  | "starBlind"
+  | "rewind"
+  | "ironCharge"
+  | "fearTrap"
+  | "manaEqualize"
+  | "corrode"
+  | "corpseFeast"
+  | "timeVortex"
+  | "decoys"
+  | "scavenge"
+  | "vampireBat"
+  | "echoDaggers"
+  | "statGamble"
+  | "signature"; // コスト3以上の固有スキル
 
 export interface SkillDef {
   name: string;
@@ -81,6 +119,8 @@ export interface OwnedUnit {
   pos: { x: number; y: number } | null;
   /** 装備アイテムID（1枠） */
   item: string | null;
+  /** 解体屋によるラン中の永続最大HP強化 */
+  hpBonus?: number;
 }
 
 export type NodeType = "battle" | "elite" | "shop" | "rest" | "event" | "boss";
@@ -110,6 +150,23 @@ export interface RunState {
   battleCount: number;
   /** 所持レリックID */
   relics: string[];
+  /** 幕ボス撃破で得る強力なエンシェントレリックID */
+  ancientRelics: string[];
+  /** 幕クリア画面で提示中の候補（リロードによる引き直し防止） */
+  pendingAncientChoices: string[];
+  /** ボス撃破後のエンシェント報酬を受け取った幕 */
+  ancientRewardActs: number[];
+  /** 次のショップへ取り置かれたアイテム候補 */
+  carriedShopItems: string[];
+  /** 現在のショップで残っている無料アイテム更新回数 */
+  shopItemRerolls: number;
+  shopRerollNodeId: number | null;
+  /** ラン終了報酬を受取済みか（再描画での二重取得防止） */
+  legacyRewarded: boolean;
+  /** 錬金術師が生成し、次戦闘開始時に自動使用されるポーション */
+  potions: string[];
+  /** 解体屋の累積スクラップ */
+  scrap: number;
   /** 未装備アイテムIDの在庫 */
   items: string[];
 }

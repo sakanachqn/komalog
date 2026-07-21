@@ -12,6 +12,7 @@ import {
   renderResult,
   renderRest,
   renderShop,
+  showCompendium,
   renderStarter,
   renderTitle,
 } from "./screens";
@@ -83,6 +84,14 @@ function render(s: Screen) {
     case "gameover":
       app.appendChild(renderGameover(s.win));
       break;
+  }
+  if (s.kind !== "title") {
+    const book = document.createElement("button");
+    book.className = "global-compendium-btn";
+    book.textContent = "📚 図鑑";
+    book.title = "ユニット・シナジー・アイテム図鑑";
+    book.addEventListener("click", () => showCompendium());
+    app.appendChild(book);
   }
 }
 

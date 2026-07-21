@@ -286,9 +286,189 @@ button.primary:hover:not(:disabled) {
   cursor: help;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
 }
+.ancient-relic-row {
+  padding-left: 6px;
+  border-left: 1px solid rgba(240, 192, 96, 0.45);
+}
+.ancient-relic-icon {
+  filter: drop-shadow(0 0 5px rgba(240, 192, 96, 0.9));
+  font-size: 22px;
+}
+
+.ancient-heading {
+  color: var(--gold);
+  font-size: 22px;
+  text-shadow: 0 0 12px rgba(240, 192, 96, 0.35);
+}
+.ancient-choice-row { align-items: stretch; }
+.ancient-card {
+  width: 280px;
+  min-height: 225px;
+  border: 2px solid rgba(240, 192, 96, 0.7);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(240, 192, 96, 0.18), transparent 52%),
+    linear-gradient(150deg, rgba(69, 46, 91, 0.96), rgba(26, 23, 48, 0.98));
+  box-shadow: 0 0 18px rgba(240, 192, 96, 0.18);
+}
+.ancient-card:hover {
+  border-color: var(--gold);
+  box-shadow: 0 0 28px rgba(240, 192, 96, 0.42);
+  transform: translateY(-4px);
+}
+.ancient-card .icon {
+  font-size: 56px;
+  filter: drop-shadow(0 0 8px rgba(240, 192, 96, 0.75));
+}
+.ancient-card b { color: var(--gold); font-size: 20px; }
+.ancient-card span:last-child { line-height: 1.65; }
+.ancient-obtained {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 14px;
+  align-items: center;
+  width: min(620px, 90vw);
+  padding: 16px 22px;
+  border: 2px solid var(--gold);
+  border-radius: 12px;
+  background: rgba(240, 192, 96, 0.1);
+}
+.ancient-obtained > span { grid-row: 1 / 3; font-size: 46px; }
+.ancient-obtained > b { color: var(--gold); font-size: 20px; }
+.ancient-obtained > small { color: var(--muted); line-height: 1.5; }
+
+.memory-balance {
+  color: #8fd9ff;
+  font-weight: 800;
+  text-shadow: 0 0 10px rgba(90, 190, 255, 0.45);
+}
+.legacy-panel { width: min(1120px, 94vw); }
+.legacy-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.legacy-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 5px 10px;
+  align-items: center;
+  padding: 13px;
+  border: 1px solid rgba(103, 192, 255, 0.38);
+  border-radius: 10px;
+  background: linear-gradient(145deg, rgba(43, 58, 91, 0.9), rgba(24, 27, 48, 0.95));
+}
+.legacy-card .legacy-icon { grid-row: 1 / 3; font-size: 30px; }
+.legacy-card b { color: #bce8ff; }
+.legacy-card small { color: var(--muted); line-height: 1.35; min-height: 36px; }
+.legacy-card button { grid-column: 1 / 3; }
+.legacy-card.owned { border-color: rgba(108, 220, 145, 0.5); background: rgba(48, 92, 65, 0.35); }
+.legacy-card.locked { opacity: 0.6; }
+.memory-reward {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 16px 24px;
+  border: 1px solid rgba(103, 192, 255, 0.6);
+  border-radius: 12px;
+  background: rgba(45, 105, 145, 0.18);
+  text-align: center;
+}
+.memory-reward b { color: #9ee2ff; font-size: 20px; }
+.memory-reward small { color: var(--muted); }
+
+/* ===== 図鑑 ===== */
+.compendium-panel { width: min(1180px, 96vw); }
+.compendium-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.compendium-tabs button { flex: 1; }
+.compendium-tabs button.active {
+  color: var(--gold);
+  border-color: var(--gold);
+  background: rgba(240, 192, 96, 0.12);
+}
+.compendium-body { min-height: 55vh; }
+.compendium-filter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(30, 33, 57, 0.97);
+}
+.compendium-filter label { color: var(--muted); font-size: 13px; }
+.compendium-filter-select {
+  min-width: 190px;
+  padding: 7px 10px;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg2);
+}
+.filter-count { margin-left: auto; color: var(--gold); font-weight: 700; }
+.unit-cost-section { margin-top: 18px; }
+.unit-cost-section:first-of-type { margin-top: 8px; }
+.unit-cost-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 10px;
+  padding: 8px 4px 7px;
+  border-bottom: 1px solid rgba(240, 192, 96, 0.38);
+}
+.unit-cost-label {
+  color: var(--gold);
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+.unit-cost-dots { color: rgba(240, 192, 96, 0.72); font-size: 10px; letter-spacing: 2px; }
+.unit-cost-count { margin-left: auto; color: var(--muted); font-size: 12px; }
+.locked-unit-section { margin-top: 30px; }
+.locked-unit-heading { border-bottom-color: rgba(170, 178, 196, 0.35); }
+.locked-unit-heading .unit-cost-label { color: #aab2c4; }
+.compendium-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.compendium-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 5px 10px;
+  align-content: start;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(30, 33, 57, 0.86);
+  text-align: left;
+}
+.compendium-icon { grid-row: 1 / 4; font-size: 34px; }
+.compendium-card > b { color: var(--gold); }
+.compendium-card em { color: var(--muted); font-size: 11px; font-style: normal; }
+.compendium-card small { color: var(--muted); line-height: 1.4; }
+.compendium-stats,
+.compendium-skill,
+.trait-level-list,
+.recipe { grid-column: 1 / 3; font-size: 12px; line-height: 1.5; }
+.compendium-skill { padding-top: 6px; border-top: 1px solid rgba(255,255,255,.08); }
+.compendium-skill b { color: var(--accent); }
+.unit-entry.undiscovered { filter: grayscale(.8); opacity: .65; min-height: 105px; }
+.trait-level-list { display: grid; gap: 4px; color: #d9e5f2; }
+.compendium-section-title { margin: 6px 0 10px; color: var(--gold); }
+.compendium-section-title:not(:first-child) { margin-top: 22px; }
+.recipe { color: #8fd9ff; }
 
 /* ===== タイトル ===== */
 .title-screen {
+  position: relative;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -296,6 +476,24 @@ button.primary:hover:not(:disabled) {
   justify-content: center;
   gap: 24px;
   text-align: center;
+}
+.title-actions { display: grid; gap: 9px; }
+.title-action-row { margin: 0; justify-content: center; }
+.title-action-row button { min-width: 190px; }
+.title-action-row:nth-child(2) button { min-width: 260px; }
+.title-compendium {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+}
+.global-compendium-btn {
+  position: fixed;
+  z-index: 120;
+  top: 14px;
+  right: 18px;
+  padding: 6px 12px;
+  border-color: rgba(103, 192, 255, 0.55);
+  background: rgba(30, 33, 57, 0.94);
 }
 .title-screen h1 {
   font-size: 54px;
@@ -347,7 +545,7 @@ button.primary:hover:not(:disabled) {
   transform: translate(-50%, -50%);
   width: 52px;
   height: 52px;
-  border-radius: 50%;
+  border-radius: 22%;
   border: 2px solid var(--border);
   background: var(--panel);
   font-size: 22px;
@@ -963,6 +1161,60 @@ button.primary:hover:not(:disabled) {
   border-color: var(--gold);
   color: var(--gold);
 }
+.craft-workbench {
+  display: grid;
+  gap: 9px;
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid rgba(240, 192, 96, 0.42);
+  border-radius: 10px;
+  background: rgba(55, 43, 29, 0.35);
+}
+.craft-workbench-head { display: flex; align-items: baseline; gap: 10px; }
+.craft-workbench-head b { color: var(--gold); }
+.craft-workbench-head small { color: var(--muted); }
+.craft-controls { display: flex; align-items: center; gap: 8px; }
+.craft-material-slot {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 1px 9px;
+  min-width: 0;
+  min-height: 66px;
+  flex: 1;
+  padding: 9px 12px;
+  border: 1px dashed rgba(240, 192, 96, 0.45);
+  background: rgba(20, 22, 38, 0.72);
+  text-align: left;
+}
+.craft-material-slot > span { grid-row: 1 / 3; min-width: 30px; font-size: 25px; text-align: center; }
+.craft-material-slot > b { color: var(--gold); }
+.craft-material-slot > small { color: var(--muted); font-size: 10px; }
+.craft-material-slot.filled { border-style: solid; background: rgba(240, 192, 96, 0.08); }
+.craft-material-slot.drag-over {
+  border-style: solid;
+  border-color: #ffe19a;
+  background: rgba(240, 192, 96, 0.2);
+  box-shadow: 0 0 12px rgba(240, 192, 96, 0.3);
+  transform: translateY(-1px);
+}
+.craft-plus { color: var(--gold); font-weight: 800; }
+.craft-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 50px;
+  padding: 8px 10px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+}
+.craft-preview.ready { border-style: solid; border-color: rgba(240, 192, 96, 0.45); color: var(--text); }
+.craft-preview > span:nth-child(2) { display: grid; gap: 2px; flex: 1; }
+.craft-preview small { color: var(--muted); line-height: 1.35; }
+.craft-result-icon { min-width: 46px; font-size: 21px; text-align: center; }
+.craft-preview .craft-btn { margin-left: auto; white-space: nowrap; }
 .item-badge {
   position: absolute;
   top: -4px;
@@ -1186,6 +1438,14 @@ button.primary:hover:not(:disabled) {
 }
 
 @media (max-width: 760px) {
+  .compendium-grid { grid-template-columns: 1fr; }
+  .compendium-tabs { flex-wrap: wrap; }
+  .title-compendium { position: static; }
+  .legacy-grid { grid-template-columns: 1fr; }
+  .craft-controls { flex-direction: column; align-items: stretch; }
+  .craft-plus { text-align: center; line-height: 1; }
+  .craft-preview.ready { align-items: flex-start; flex-wrap: wrap; }
+  .craft-preview .craft-btn { width: 100%; margin-left: 0; }
   :root { --cell: 46px; }
   .side-panel { width: 100%; max-width: 380px; }
   /* 狭い画面ではシナジーパネルをコンテンツの下へ回り込ませる */
@@ -1199,4 +1459,30 @@ button.primary:hover:not(:disabled) {
     position: static;
     margin-top: 0;
   }
+}
+/* Generated mini-icon atlases. Emoji text remains in the DOM as an accessibility/failure fallback. */
+.art-icon {
+  display: inline-block;
+  width: 1.35em;
+  height: 1.35em;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border-radius: 50%;
+  color: transparent;
+  font-size: inherit;
+  line-height: 1;
+  vertical-align: -0.25em;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+  image-rendering: auto;
+}
+.unit .icon > .art-icon,
+.bench-slot .icon > .art-icon,
+.unit-card .icon > .art-icon,
+.option-card .icon > .art-icon,
+.compendium-icon > .art-icon {
+  width: 1em;
+  height: 1em;
+  vertical-align: 0;
 }

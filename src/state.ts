@@ -1,9 +1,10 @@
 import { ascMods } from "./ascension";
 import { rollActRule } from "./data/actrules";
 import { rollItem, rollRelicChoices } from "./data/relics";
+import { rollAncientRelicChoices } from "./data/ancientRelics";
 import { UNIT_BY_ID } from "./data/units";
 import { generateMap } from "./map";
-import { grantUnlock, meta, saveMeta } from "./meta";
+import { grantUnlock, hasLegacy, legacyLevel, meta, saveMeta } from "./meta";
 import type { OwnedUnit, RunState, UnitDef } from "./types";
 
 export const BOARD_COLS = 7;
@@ -16,7 +17,7 @@ export function newRun(starterDefIds: string[], asc = 0): RunState {
   const run: RunState = {
     playerHp: maxHp,
     playerMaxHp: maxHp,
-    gold: 10 + mods.startGold,
+    gold: 10 + mods.startGold + legacyLevel("start_gold_") * 3,
     act: 1,
     asc,
     actRule: rollActRule(),
@@ -29,6 +30,15 @@ export function newRun(starterDefIds: string[], asc = 0): RunState {
     nextIid: 1,
     battleCount: 0,
     relics: [],
+    ancientRelics: [],
+    pendingAncientChoices: [],
+    ancientRewardActs: [],
+    carriedShopItems: [],
+    shopItemRerolls: 0,
+    shopRerollNodeId: null,
+    legacyRewarded: false,
+    potions: [],
+    scrap: 0,
     items: [],
   };
   for (const id of starterDefIds) {
@@ -37,6 +47,10 @@ export function newRun(starterDefIds: string[], asc = 0): RunState {
   // アセンションのバフ: 開始時アイテム・レリック
   for (let i = 0; i < mods.startItems; i++) run.items.push(rollItem());
   for (const r of rollRelicChoices([], mods.startRelics)) run.relics.push(r.id);
+  if (hasLegacy("start_ancient")) {
+    const ancient = rollAncientRelicChoices([], 1)[0];
+    if (ancient) run.ancientRelics.push(ancient.id);
+  }
   // 初期配置
   autoPlace(run);
   meta().counters.totalRuns++;
@@ -53,7 +67,8 @@ export function globalFloor(run: RunState): number {
 export function teamCap(run: RunState): number {
   const base = Math.min(8, 3 + Math.floor(globalFloor(run) / 3));
   const crown = run.relics.includes("crown") ? 1 : 0;
-  return base + crown + ascMods(run.asc).capBonus;
+  const normal = base + crown + ascMods(run.asc).capBonus;
+  return run.ancientRelics.includes("legionPact") ? normal * 2 : normal;
 }
 
 export function boardUnits(run: RunState): OwnedUnit[] {
