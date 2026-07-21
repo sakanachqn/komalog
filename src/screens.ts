@@ -2032,9 +2032,14 @@ export function renderShop(node: MapNode, rescue = false): HTMLElement {
     const list = el("div", "roster-list");
     for (const ou of run.roster) {
       const def = unitDef(ou);
-      const chip = el("div", "roster-chip");
+      const onBoard = ou.pos !== null;
+      const chip = el("div", `roster-chip ${onBoard ? "on-board" : "on-bench"}`);
+      chip.title = onBoard
+        ? `盤面に配置中（${ou.pos!.x + 1}列・${ou.pos!.y + 1}行）`
+        : "ベンチで待機中";
       const sellValue = def.cost * (ou.star === 1 ? 1 : ou.star === 2 ? 3 : 9);
       chip.append(
+        el("span", `roster-location ${onBoard ? "board" : "bench"}`, onBoard ? "盤面" : "ベンチ"),
         el("span", "", `${def.icon} ${def.name} ${starsText(ou.star)}`),
         btn(`売却 +${sellValue}G`, "", () => {
           sellUnit(run, ou.iid);

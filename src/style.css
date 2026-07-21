@@ -1432,6 +1432,30 @@ button.primary:hover:not(:disabled) {
   padding: 6px 10px;
   font-size: 13px;
 }
+.roster-chip.on-board {
+  background: linear-gradient(135deg, rgba(72, 140, 255, 0.18), var(--panel));
+  border-color: rgba(100, 165, 255, 0.75);
+  box-shadow: inset 3px 0 0 #69a7ff;
+}
+.roster-location {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+.roster-location.board {
+  color: #e8f3ff;
+  background: #3978c8;
+}
+.roster-location.bench {
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.08);
+}
 .roster-chip button {
   padding: 2px 8px;
   font-size: 11px;
