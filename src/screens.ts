@@ -17,7 +17,7 @@ import type { SaveData } from "./save";
 import { isMuted, sfx, toggleMute } from "./sound";
 import { ASC_LEVELS, MAX_ASC, ascMods } from "./ascension";
 import { ACT_RULE_BY_ID, rollActRule } from "./data/actrules";
-import { LEGACY_UPGRADES, UNLOCK_INFO, bumpCounter, buyLegacy, discoverAncientRelics, discoverRelics, grantUnlock, hasAchievementMilestone, hasLegacy, hasUnlock, legacyLevel, meta, saveMeta } from "./meta";
+import { LEGACY_UPGRADES, UNLOCK_INFO, bumpCounter, buyLegacy, discoverAncientRelics, discoverRelics, grantUnlock, hasAchievementMilestone, hasLegacy, hasUnlock, legacyLevel, meta, recheckPersistentAchievements, saveMeta } from "./meta";
 import { FLOOR_COUNT, NODE_META } from "./map";
 import { ctx, go } from "./router";
 import {
@@ -305,6 +305,16 @@ function hud(run: RunState, onAbandon?: () => void): HTMLElement {
   discoverRelics(run.relics);
   discoverAncientRelics(run.ancientRelics);
   const h = el("div", "hud");
+  const currentCap = teamCap(run);
+  if (run.lastShownTeamCap === undefined) {
+    run.lastShownTeamCap = currentCap;
+  } else if (currentCap > run.lastShownTeamCap) {
+    const previousCap = run.lastShownTeamCap;
+    run.lastShownTeamCap = currentCap;
+    requestAnimationFrame(() => showTeamCapIncrease(previousCap, currentCap));
+  } else if (currentCap < run.lastShownTeamCap) {
+    run.lastShownTeamCap = currentCap;
+  }
   const progress = Math.min(100, ((run.floorIndex + 1) / FLOOR_COUNT) * 100);
   const journey = el("span", "hud-journey");
   journey.append(
@@ -340,7 +350,7 @@ function hud(run: RunState, onAbandon?: () => void): HTMLElement {
     }
     h.appendChild(row);
   }
-  h.append(el("span", "spacer"), el("span", "", `配置上限 ${teamCap(run)}体`));
+  h.append(el("span", "spacer"), el("span", "", `配置上限 ${currentCap}体`));
   const abandonBtn = el("button", "abandon-btn", "🏳️ 諦める");
   abandonBtn.title = "現在のランを終了する";
   abandonBtn.addEventListener("click", () => showAbandonConfirm(onAbandon ?? (() => go({ kind: "gameover", win: false, abandoned: true }))));
@@ -360,6 +370,22 @@ function hud(run: RunState, onAbandon?: () => void): HTMLElement {
   });
   h.appendChild(muteBtn);
   return h;
+}
+
+function showTeamCapIncrease(previous: number, current: number): void {
+  document.querySelector(".team-cap-toast")?.remove();
+  const toast = el("div", "team-cap-toast");
+  const slots = el("div", "team-cap-slots");
+  for (let i = 0; i < current; i++) slots.appendChild(el("i", i >= previous ? "new" : ""));
+  toast.append(
+    el("small", "", "編成枠拡張"),
+    el("b", "", `配置上限 ${previous} → ${current}`),
+    slots,
+    el("span", "", `盤面に配置できるユニットが${current - previous}体増えました`),
+  );
+  document.body.appendChild(toast);
+  sfx.ui("confirm");
+  setTimeout(() => toast.remove(), gameSettings().reducedEffects ? 1800 : 3300);
 }
 
 function cellPos(x: number, y: number): { left: string; top: string } {
@@ -1004,6 +1030,7 @@ function withTraitSide(
 /* ================= タイトル ================= */
 
 export function renderTitle(): HTMLElement {
+  recheckPersistentAchievements();
   const complete = hasAchievementMilestone(31);
   const s = el("div", `title-screen${complete ? " achievement-complete-title" : ""}`);
   const layout = el("div", "title-layout");
@@ -2713,6 +2740,8 @@ export function renderShop(node: MapNode, rescue = false): HTMLElement {
       const def = offers[i];
       if (!def) continue;
       const upgradeStar = purchaseStarUpgrade(run, def.id);
+      const boardCopies = boardUnits(run).filter((unit) => unit.defId === def.id).length;
+      const benchCopies = benchUnits(run).filter((unit) => unit.defId === def.id).length;
       const card = unitCard(def, "購入", () => {
         if (run.gold < unitPrice(def)) {
           showAttentionMessage(msg, `⚠️ ゴールドが足りない！ あと ${unitPrice(def) - run.gold}G 必要です`);
@@ -2728,6 +2757,12 @@ export function renderShop(node: MapNode, rescue = false): HTMLElement {
         sfx.coin();
         rerenderAll();
       });
+      if (boardCopies > 0 || benchCopies > 0) {
+        const labels = el("div", "shop-owned-labels");
+        if (boardCopies > 0) labels.appendChild(el("span", "board", `盤面 ${boardCopies}`));
+        if (benchCopies > 0) labels.appendChild(el("span", "bench", `ベンチ ${benchCopies}`));
+        card.appendChild(labels);
+      }
       if (upgradeStar) {
         card.classList.add("shop-star-upgrade");
         card.appendChild(el("div", "shop-upgrade-badge", `✨ 購入で★${upgradeStar}へアップ！`));

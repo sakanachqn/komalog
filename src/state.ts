@@ -60,6 +60,7 @@ export function newRun(starterDefIds: string[], asc = 0): RunState {
   }
   // 初期配置
   autoPlace(run);
+  run.lastShownTeamCap = teamCap(run);
   meta().counters.totalRuns++;
   saveMeta();
   if (meta().counters.totalRuns >= 10) grantUnlock("runs10");

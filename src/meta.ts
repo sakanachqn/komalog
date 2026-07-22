@@ -232,6 +232,26 @@ export function grantUnlock(id: string) {
   showToast(`🏆 実績達成！ ${info?.cond ?? id}／${info?.reward ?? "報酬獲得"}`);
 }
 
+/** 追加実績より前のセーブでも、恒久記録から確実に判断できる条件を再評価する。 */
+export function recheckPersistentAchievements(): void {
+  const m = meta();
+  if (m.counters.battleWins >= 1) grantUnlock("first_battle");
+  if (m.counters.battleWins >= 30) grantUnlock("wins30");
+  if (m.counters.battleWins >= 100) grantUnlock("wins100");
+  if (m.counters.eliteWins >= 5) grantUnlock("elites5");
+  if (m.counters.crafts >= 1) grantUnlock("first_craft");
+  if (m.counters.crafts >= 5) grantUnlock("crafts5");
+  if (m.counters.totalRuns >= 10) grantUnlock("runs10");
+  if (m.records.totalWins >= 1) {
+    grantUnlock("clear_act1");
+    grantUnlock("reach_act2");
+    grantUnlock("beat_dragon");
+    grantUnlock("first_clear");
+  }
+  if (m.records.totalWins >= 3) grantUnlock("clear_three");
+  if (m.records.ascBest >= 20) grantUnlock("ascension20_clear");
+}
+
 export function showToast(text: string) {
   let stack = document.querySelector<HTMLElement>(".unlock-toast-stack");
   if (!stack) {

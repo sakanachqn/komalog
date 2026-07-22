@@ -148,6 +148,8 @@ export interface RunState {
   roster: OwnedUnit[];
   nextIid: number;
   battleCount: number;
+  /** 配置上限増加演出を最後に表示した時点の上限 */
+  lastShownTeamCap?: number;
   /** 所持レリックID */
   relics: string[];
   /** 幕ボス撃破で得る強力なエンシェントレリックID */
