@@ -1987,19 +1987,30 @@ button.primary:hover:not(:disabled) {
   text-shadow: 0 1px rgba(255, 255, 255, .45);
 }
 .shop-owned-labels {
-  display: flex;
+  display: inline-flex;
   justify-content: center;
+  align-items: center;
   gap: 4px;
+  width: max-content;
+  max-width: 100%;
   min-height: 18px;
 }
 .shop-owned-labels span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  min-width: 0;
+  height: auto;
+  margin: 0;
   padding: 2px 6px;
+  white-space: nowrap;
   font-size: 9px;
   font-weight: 800;
   line-height: 1.25;
   border-radius: 999px;
 }
-.shop-owned-labels .board { color: #e9f5ff; background: rgba(55,120,200,.72); border: 1px solid rgba(105,175,255,.7); }
+.shop-owned-labels .owned-board { color: #e9f5ff; background: rgba(55,120,200,.72); border: 1px solid rgba(105,175,255,.7); }
 .shop-owned-labels .owned-bench { color: #ddd7e8; background: rgba(105,95,125,.58); border: 1px solid rgba(165,150,190,.46); }
 .unit-card .icon { font-size: 50px; }
 .unit-card .name { font-size: 17px; font-weight: bold; }

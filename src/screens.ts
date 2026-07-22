@@ -2889,7 +2889,7 @@ export function renderShop(node: MapNode, rescue = false): HTMLElement {
       }
       if (boardCopies > 0 || benchCopies > 0) {
         const labels = el("div", "shop-owned-labels");
-        if (boardCopies > 0) labels.appendChild(el("span", "board", `盤面 ${boardCopies}`));
+        if (boardCopies > 0) labels.appendChild(el("span", "owned-board", `盤面 ${boardCopies}`));
         if (benchCopies > 0) labels.appendChild(el("span", "owned-bench", `ベンチ ${benchCopies}`));
         card.appendChild(labels);
       }
