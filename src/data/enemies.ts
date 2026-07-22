@@ -38,9 +38,9 @@ export const ENEMIES: Record<string, EnemyDef> = {
     SK("かち割り", "対象に攻撃力200%の物理ダメージ", 70, "pierce", 200)),
   wraith: E("wraith", "レイス", "👻", 700, 85, 0.95, 2, 15,
     SK("死神の鎌", "最もHPの低い敵に攻撃力200%のダメージ", 75, "execute", 200, "shadow")),
-  orcKing: E("orcKing", "オークの王", "🤴", 3000, 110, 0.75, 1, 40,
+  orcKing: E("orcKing", "オークの王", "🤴", 2000, 110, 0.75, 1, 40,
     SK("大暴れ", "対象周辺に攻撃力140%の物理ダメージ", 80, "aoe", 140)),
-  slimeLord: E("slimeLord", "スライムロード", "🫠", 3400, 95, 0.7, 1, 30,
+  slimeLord: E("slimeLord", "スライムロード", "🫠", 2400, 95, 0.7, 1, 30,
     SK("分裂体当たり", "対象周辺に攻撃力130%の物理ダメージ", 75, "aoe", 130)),
   // 第2幕
   lizard: E("lizard", "リザード戦士", "🦎", 700, 70, 0.85, 1, 25),
@@ -51,9 +51,9 @@ export const ENEMIES: Record<string, EnemyDef> = {
     SK("呪詛", "対象に攻撃力170%の闇ダメージ", 70, "nuke", 170, "shadow")),
   blackKnight: E("blackKnight", "黒鎧兵", "🪖", 1100, 85, 0.7, 1, 45,
     SK("鉄の構え", "自身に攻撃力250%のシールド", 60, "shield", 250)),
-  dragon: E("dragon", "ドラゴン", "🐲", 3600, 125, 0.8, 2, 45,
+  dragon: E("dragon", "ドラゴン", "🐲", 2500, 125, 0.8, 2, 45,
     SK("火炎のブレス", "対象周辺に攻撃力135%の炎ダメージ", 70, "aoe", 135, "fire")),
-  griffon: E("griffon", "グリフォン", "🦁", 3200, 115, 1.0, 2, 30,
+  griffon: E("griffon", "グリフォン", "🦁", 2100, 115, 1.0, 2, 30,
     SK("連続爪撃", "ランダムな敵3体に攻撃力140%の物理ダメージ", 75, "multishot", 140, "phys")),
   // 第3幕
   lich: E("lich", "リッチ", "💀", 900, 110, 0.75, 3, 20,
@@ -63,9 +63,9 @@ export const ENEMIES: Record<string, EnemyDef> = {
     SK("裁きの光", "対象に攻撃力220%の光ダメージ", 80, "nuke", 220, "holy")),
   abomination: E("abomination", "蠢く肉塊", "🧟", 2200, 100, 0.55, 1, 50,
     SK("毒素散布", "対象周辺に攻撃力130%の闇ダメージ", 80, "aoe", 130, "shadow")),
-  demonLord: E("demonLord", "魔王", "😈", 4200, 145, 0.8, 2, 50,
+  demonLord: E("demonLord", "魔王", "😈", 2700, 145, 0.8, 2, 50,
     SK("冥界の炎", "対象周辺に攻撃力150%の闇ダメージ", 75, "aoe", 150, "shadow")),
-  reaper: E("reaper", "死神", "☠️", 3800, 160, 0.75, 2, 40,
+  reaper: E("reaper", "死神", "☠️", 2300, 160, 0.75, 2, 40,
     SK("魂刈り", "最もHPの低い敵に攻撃力260%の闇ダメージ", 70, "execute", 260, "shadow")),
   impGuard: E("impGuard", "親衛インプ", "👾", 800, 70, 0.9, 1, 25),
 };
@@ -106,8 +106,8 @@ export function enemyTeamFor(act: number, floor: number, type: "battle" | "elite
           { def: N.slimeLord, x: 3, y: 1 },
           { def: N.slime, x: 1, y: 2 },
           { def: N.slime, x: 5, y: 2 },
-          { def: N.slime, x: 2, y: 3 },
-          { def: N.slime, x: 4, y: 3 },
+          { def: N.gobArcher, x: 2, y: 0 },
+          { def: N.gobArcher, x: 4, y: 0 },
         ],
       ],
       2: [
@@ -145,7 +145,12 @@ export function enemyTeamFor(act: number, floor: number, type: "battle" | "elite
         ],
       ],
     };
-    return { spawns: pickOne(bosses[act] ?? bosses[3]), scale };
+    const spawns = pickOne(bosses[act] ?? bosses[3]);
+    // 通常戦の幕倍率は維持しつつ、ボスだけ幕間の急激なスタッツ上昇を均す。
+    const actBossAdjust: Record<number, number> = { 1: 1, 2: 0.85, 3: 0.73 };
+    // 第1幕の2候補を近い総戦力へ。低火力なスライムロード側をわずかに補強する。
+    const variantAdjust = spawns[0]?.def.id === "slimeLord" ? 1.05 : 1;
+    return { spawns, scale: scale * (actBossAdjust[act] ?? 0.73) * variantAdjust };
   }
 
   if (type === "elite") {
