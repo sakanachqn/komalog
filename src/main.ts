@@ -2,6 +2,8 @@ import "./style.css";
 import { ctx, onNavigate, go } from "./router";
 import { clearSave, saveGame } from "./save";
 import type { Screen } from "./types";
+import { initHoverTooltips } from "./hoverTooltip";
+import { applySettingsClass } from "./settings";
 import {
   renderActClear,
   renderBattle,
@@ -18,6 +20,8 @@ import {
 } from "./screens";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
+initHoverTooltips();
+applySettingsClass();
 
 /** 再開可能な画面に来たら自動セーブ */
 function autoSave(s: Screen) {

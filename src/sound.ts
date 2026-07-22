@@ -30,7 +30,7 @@ function out(): GainNode | null {
     if (!actx) {
       actx = new AudioContext();
       master = actx.createGain();
-      master.gain.value = 0.7;
+      master.gain.value = gameSettings().volume;
       const lowpass = actx.createBiquadFilter();
       lowpass.type = "lowpass";
       lowpass.frequency.value = 2000;
@@ -38,6 +38,7 @@ function out(): GainNode | null {
       master.connect(lowpass).connect(actx.destination);
     }
     if (actx.state === "suspended") void actx.resume();
+    if (master) master.gain.value = gameSettings().volume;
     return master;
   } catch {
     return null;
@@ -158,3 +159,4 @@ export const sfx = {
     notes.forEach((f, i) => tone(f, 0.35, "sine", 0.11, undefined, i * 0.2));
   },
 };
+import { gameSettings } from "./settings";

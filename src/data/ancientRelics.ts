@@ -17,7 +17,7 @@ export const ANCIENT_RELICS: AncientRelicDef[] = [
     id: "legionPact",
     name: "千軍の契約",
     icon: "📜",
-    desc: "配置上限が2倍になる代わりに、味方全員の最大HP・攻撃力・防御が50%になる",
+    desc: "配置上限が2倍になる代わりに、味方全員の最大HP・攻撃力が60%、防御が75%になる",
   },
   {
     id: "aegisCore",
@@ -41,7 +41,7 @@ export const ANCIENT_RELICS: AncientRelicDef[] = [
     id: "bloodGrail",
     name: "血神の杯",
     icon: "🍷",
-    desc: "狂戦士の最大HP +15%、吸血 +25%",
+    desc: "狂戦士の最大HP +25%、攻撃速度 +20%、吸血 +30%",
   },
   {
     id: "ninefoldHarmony",
@@ -62,12 +62,12 @@ export const ANCIENT_RELICS: AncientRelicDef[] = [
   { id: "warGodArm", name: "武神の左腕", icon: "💪", desc: "アイテム未装備ユニットの攻撃力・呪文威力+35%、攻撃速度+20%" },
   { id: "treasureAltar", name: "宝物王の祭壇", icon: "🏺", desc: "アイテム装備中の味方が倒れると、生存中の味方1体がその遺志を受け継いで強化される" },
   { id: "primeCrucible", name: "原初の坩堝", icon: "🏭", desc: "合成アイテム装備者の最大HP・攻撃力・呪文威力+25%。通常アイテム装備者は-20%" },
-  { id: "reverseHourglass", name: "逆巻く砂時計", icon: "⌛", desc: "戦闘開始5秒後、生存中の味方のHP・位置・マナを戦闘開始時へ一度だけ戻す" },
+  { id: "reverseHourglass", name: "逆巻く砂時計", icon: "⌛", desc: "戦闘開始5秒後、生存中の味方のHP・マナを開始時以上まで回復し、初期位置へ戻す" },
   { id: "twilightBell", name: "黄昏の鐘", icon: "🔔", desc: "味方が3体倒れた瞬間、残った味方のマナを最大にし、戦闘終了まで攻撃速度+50%" },
-  { id: "lifeBeacon", name: "命の灯台", icon: "🗼", desc: "各味方は戦闘中1回、HP30%未満で最大HP20%のシールドを得て後方へ退避する" },
+  { id: "lifeBeacon", name: "命の灯台", icon: "🗼", desc: "各味方は戦闘中1回、HP30%未満で状態異常を解除し、最大HP35%のシールドとマナ20を得て後方へ退避する" },
   { id: "binaryStarCore", name: "連星の核", icon: "🌟", desc: "初期配置で同じ縦列・横列に味方がいるユニットは攻撃力・呪文威力+20%。3体以上の列ならマナ獲得+25%" },
   { id: "emptyThrone", name: "空白の玉座", icon: "🪑", desc: "盤面中央4マスを空けて開始すると、味方全員の射程+1、与ダメージ+25%" },
-  { id: "soulMirror", name: "魂写しの鏡", icon: "🪞", desc: "戦闘開始時、最低コストの味方1体が最高コストの味方のスキルを70%威力でコピー" },
+  { id: "soulMirror", name: "魂写しの鏡", icon: "🪞", desc: "戦闘開始時、最低コストの味方1体が最高コストの味方のスキルを90%威力でコピーし、マナ+30" },
   { id: "dragonHeart", name: "竜脈の心臓", icon: "🐲", desc: "味方がスキルを合計6回発動するたび、敵全体へ最大HP5%ダメージ、味方全体を最大HP5%回復" },
   { id: "doomsdayContract", name: "終末の契約書", icon: "📕", desc: "味方はHP70%で開始する代わりに、クリ率+30%、クリダメ+50%、吸血+15%" },
 ];

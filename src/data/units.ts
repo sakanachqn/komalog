@@ -75,7 +75,7 @@ export const TRAITS: Record<TraitId, TraitInfo> = {
   },
   resonator: { id: "resonator", name: "共鳴者", icon: "〽️", thresholds: [2, 4, 6], desc: (t) => `隣接する共鳴者がスキルを${[0, 35, 50, 65][t]}%威力で1回追撃（追撃は共鳴しない）` },
   clockwork: { id: "clockwork", name: "時計仕掛け", icon: "⚙️", thresholds: [2, 4, 6], desc: (t) => `開幕${[0, 1, 1.5, 2][t]}秒、時計仕掛け以外を停止。停止中の与ダメージ50%` },
-  parasite: { id: "parasite", name: "寄生虫", icon: "🪱", thresholds: [2, 3, 4], desc: (t) => `死亡時に寄生し毎秒最大HP${[0, 1, 1.5, 2][t]}%ダメージ。最大${[0, 1, 2, 3][t]}回伝染` },
+  parasite: { id: "parasite", name: "寄生虫", icon: "🪱", thresholds: [2, 3, 4], desc: (t) => `死亡時に寄生し毎秒最大HP${[0, 1.5, 2, 3][t]}%ダメージ。最大${[0, 1, 2, 3][t]}回伝染` },
   gravity: { id: "gravity", name: "重力使い", icon: "🪐", thresholds: [2, 4, 6], desc: (t) => `${[0, 8, 6, 4][t]}秒ごとに敵を中央へ引き寄せ、衝突時スタン` },
   alchemist: { id: "alchemist", name: "錬金術師", icon: "⚗️", thresholds: [2, 3, 4], desc: (t) => `勝利時、生存者から最大${[0, 1, 2, 3][t]}個のポーションを生成（所持上限3）` },
   gambler: { id: "gambler", name: "賭博師", icon: "🎲", thresholds: [2, 3, 4], desc: (t) => `開幕コイントス。表: クリ率+${[0, 25, 40, 55][t]}%。裏: ${[0, 2, 1.5, 1][t]}秒スキル使用不可` },
@@ -85,7 +85,7 @@ export const TRAITS: Record<TraitId, TraitInfo> = {
   bloodpact: { id: "bloodpact", name: "血盟", icon: "🩸", thresholds: [2, 4, 6], desc: (t) => `血盟へのダメージを頭割りし、元の被弾1回につき全員のマナ+${[0, 2, 3, 4][t]}` },
   constellation: { id: "constellation", name: "星座師", icon: "🌠", thresholds: [2, 4, 6], desc: (t) => `星座師と同じ縦・横ラインに初期配置した味方の必要マナ-${[0, 10, 18, 25][t]}%` },
   dismantler: { id: "dismantler", name: "解体屋", icon: "🔧", thresholds: [2, 3, 4], desc: (t) => `敵のシールド・防御破壊でスクラップ獲得（1戦最大${[0, 2, 4, 6][t]}）。5個で味方1体の最大HP+50` },
-  jester: { id: "jester", name: "道化師", icon: "🃏", thresholds: [2, 3, 4], desc: (t) => `開幕、道化師最大${[0, 1, 2, 3][t]}体がボス以外の敵と位置交換（チームで1回）` },
+  jester: { id: "jester", name: "道化師", icon: "🃏", thresholds: [2, 3, 4], desc: (t) => `開幕、道化師最大${[0, 1, 2, 3][t]}体が敵と位置交換。ボス戦では代わりに各道化師が攻撃を${[0, 1, 2, 3][t]}回無効化` },
 };
 
 export const UNITS: UnitDef[] = [
@@ -230,7 +230,7 @@ export const UNITS: UnitDef[] = [
     atkSpeed: 0.7,
     range: 3,
     armor: 12,
-    skill: { name: "星落とし", desc: "敵の密集地へメテオを落とし、中心へ追加ダメージ・外周を押し退ける", mana: 90, type: "signature", power: 330, scaling: "spell", fx: "fire" },
+    skill: { name: "星落とし", desc: "密集地の半径1マスへ330魔法ダメージ、中心へ追加182ダメージ。外周の敵を1マス押し出す", mana: 90, type: "signature", power: 330, scaling: "spell", fx: "fire" },
   },
   {
     id: "dragoon",
@@ -243,7 +243,7 @@ export const UNITS: UnitDef[] = [
     atkSpeed: 0.85,
     range: 2,
     armor: 28,
-    skill: { name: "竜槍滑空", desc: "最も遠い敵へ突進し、経路上を薙ぎ払い着地点の敵の防御を下げる", mana: 80, type: "signature", power: 210, scaling: "attack", fx: "phys" },
+    skill: { name: "竜槍滑空", desc: "最遠の敵へ突進し、経路上へ攻撃力158%の物理ダメージ。着地点周囲1マスの防御-18", mana: 80, type: "signature", power: 210, scaling: "attack", fx: "phys" },
   },
   {
     id: "skeleton",
@@ -360,7 +360,7 @@ export const UNITS: UnitDef[] = [
     atkSpeed: 0.75,
     range: 1,
     armor: 40,
-    skill: { name: "冥府の契約", desc: "自身にシールドを張って周囲を爆破。倒れた味方が多いほど威力上昇", mana: 85, type: "signature", power: 210, scaling: "attack", fx: "shadow" },
+    skill: { name: "冥府の契約", desc: "攻撃力168%のシールドを得て周囲1マスを爆破。倒れた味方1体につき威力+15%（最大+75%）", mana: 85, type: "signature", power: 210, scaling: "attack", fx: "shadow" },
   },
   {
     id: "ashura",
@@ -492,7 +492,7 @@ export const UNITS: UnitDef[] = [
     atkSpeed: 1.0,
     range: 1,
     armor: 16,
-    skill: { name: "血の昂ぶり", desc: "自身の攻撃速度+60%、クリティカル率+40%（戦闘中持続）", mana: 55, type: "frenzy", power: 0, scaling: "attack" },
+    skill: { name: "血の昂ぶり", desc: "攻撃力120%のシールドを得て、攻撃速度+60%、クリティカル率+40%（戦闘中持続）", mana: 55, type: "frenzy", power: 120, scaling: "attack" },
   },
   {
     id: "hunter",
@@ -571,7 +571,7 @@ export const UNITS: UnitDef[] = [
     atkSpeed: 0.7,
     range: 3,
     armor: 12,
-    skill: { name: "火山核", desc: "対象へ火山核を埋め込み、継続炎上と周囲への爆発を起こす", mana: 85, type: "signature", power: 300, scaling: "spell", fx: "fire" },
+    skill: { name: "火山核", desc: "対象へ165魔法ダメージと4秒間の炎上を与え、周囲1マスを195ダメージで爆破", mana: 85, type: "signature", power: 300, scaling: "spell", fx: "fire" },
   },
   {
     id: "stormspirit",
@@ -597,7 +597,7 @@ export const UNITS: UnitDef[] = [
     atkSpeed: 1.0,
     range: 3,
     armor: 14,
-    skill: { name: "影縫い", desc: "最も遠い敵まで貫く矢を放ち、着地点周囲の敵を拘束する", mana: 85, type: "signature", power: 300, scaling: "attack", fx: "shadow" },
+    skill: { name: "影縫い", desc: "最遠の敵まで貫き攻撃力300%の物理ダメージ。着地点周囲1マスを1.2秒拘束", mana: 85, type: "signature", power: 300, scaling: "attack", fx: "shadow" },
   },
   {
     id: "boarrider",
@@ -610,7 +610,7 @@ export const UNITS: UnitDef[] = [
     atkSpeed: 0.8,
     range: 1,
     armor: 30,
-    skill: { name: "猛進再突撃", desc: "敵の密集地へ突進・爆砕し、折り返しでもう一度薙ぎ払う", mana: 80, type: "signature", power: 220, scaling: "attack", fx: "phys" },
+    skill: { name: "猛進再突撃", desc: "密集地への突進で攻撃力121%、爆砕で143%、折り返しで88%の物理ダメージ", mana: 80, type: "signature", power: 220, scaling: "attack", fx: "phys" },
   },
   {
     id: "oracle",
@@ -623,7 +623,7 @@ export const UNITS: UnitDef[] = [
     atkSpeed: 0.7,
     range: 3,
     armor: 16,
-    skill: { name: "未来の選定", desc: "最も傷ついた味方へ先回りして大シールドと回復を与える", mana: 80, type: "signature", power: 300, scaling: "spell", fx: "holy" },
+    skill: { name: "未来の選定", desc: "HP割合が最も低い味方1体へ240のシールドを与え、165回復", mana: 80, type: "signature", power: 300, scaling: "spell", fx: "holy" },
   },
   // ===== コスト4（高コスト・強力スキル） =====
   {
@@ -637,7 +637,7 @@ export const UNITS: UnitDef[] = [
     atkSpeed: 0.85,
     range: 1,
     armor: 42,
-    skill: { name: "決戦命令", desc: "味方全体の攻撃・攻撃速度・マナを一斉に強化する", mana: 80, type: "signature", power: 0, scaling: "spell", fx: "phys" },
+    skill: { name: "決戦命令", desc: "味方全体の攻撃力+32%、攻撃速度+18%、マナ+12。各自へ91のシールド", mana: 80, type: "signature", power: 260, scaling: "spell", fx: "phys" },
   },
   {
     id: "archangel",
@@ -663,7 +663,7 @@ export const UNITS: UnitDef[] = [
     atkSpeed: 0.75,
     range: 3,
     armor: 22,
-    skill: { name: "超電導嵐", desc: "敵全体へ落雷し、隣接した敵へ追加放電する", mana: 90, type: "signature", power: 370, scaling: "spell", fx: "bolt" },
+    skill: { name: "超電導嵐", desc: "敵全体へ215魔法ダメージと2秒鈍足。隣接する別の敵へ104追加ダメージ", mana: 90, type: "signature", power: 370, scaling: "spell", fx: "bolt" },
   },
   {
     id: "soulreaper",
@@ -676,7 +676,7 @@ export const UNITS: UnitDef[] = [
     atkSpeed: 1.0,
     range: 1,
     armor: 24,
-    skill: { name: "魂の徴収", desc: "瀕死の敵を処刑し、成功すると攻撃力上昇と大量のマナを得る", mana: 90, type: "signature", power: 430, scaling: "attack", fx: "shadow" },
+    skill: { name: "魂の徴収", desc: "HP30%以下の非ボスを処刑。それ以外へ攻撃力430%の物理ダメージ。撃破時、攻撃力+12%・最大マナの65%を獲得", mana: 90, type: "signature", power: 430, scaling: "attack", fx: "shadow" },
   },
   {
     id: "frostqueen",
@@ -689,7 +689,7 @@ export const UNITS: UnitDef[] = [
     atkSpeed: 0.7,
     range: 3,
     armor: 34,
-    skill: { name: "氷河宮殿", desc: "広範囲を氷河に変え、敵へダメージ・鈍足・凍結を与える", mana: 90, type: "signature", power: 380, scaling: "spell", fx: "ice" },
+    skill: { name: "氷河宮殿", desc: "密集地の半径2マスへ274魔法ダメージ、4.5秒鈍足・1.8秒凍結（ボスは0.8秒）", mana: 90, type: "signature", power: 380, scaling: "spell", fx: "ice" },
   },
   {
     id: "bombardier",
@@ -702,7 +702,7 @@ export const UNITS: UnitDef[] = [
     atkSpeed: 0.8,
     range: 4,
     armor: 26,
-    skill: { name: "照準砲列", desc: "対象の横一列を端から順番に制圧砲撃する", mana: 90, type: "signature", power: 330, scaling: "spell", fx: "fire" },
+    skill: { name: "照準砲列", desc: "対象の横一列7マスを砲撃し、各着弾地点の周囲へ149魔法ダメージ", mana: 90, type: "signature", power: 330, scaling: "spell", fx: "fire" },
   },
   // ===== コスト5（最高コスト・ゲームを決めるスキル） =====
   {
@@ -716,7 +716,7 @@ export const UNITS: UnitDef[] = [
     atkSpeed: 0.65,
     range: 2,
     armor: 45,
-    skill: { name: "世界樹の芽吹き", desc: "味方全体を大回復・シールド・マナで支え、近くの敵を根で拘束する", mana: 100, type: "signature", power: 500, scaling: "spell", fx: "holy" },
+    skill: { name: "世界樹の芽吹き", desc: "味方全体を400回復し225シールド・マナ+15。自身から3マス以内の敵を1.2秒拘束", mana: 100, type: "signature", power: 500, scaling: "spell", fx: "holy" },
   },
   {
     id: "voidlord",
@@ -729,7 +729,7 @@ export const UNITS: UnitDef[] = [
     atkSpeed: 0.75,
     range: 3,
     armor: 30,
-    skill: { name: "存在消去", desc: "敵の密集地を虚無へ沈め、長時間行動不能・沈黙と大ダメージを与える", mana: 100, type: "signature", power: 560, scaling: "spell", fx: "shadow" },
+    skill: { name: "存在消去", desc: "密集地の周囲1マスへ448魔法ダメージ、3.5秒の行動不能・沈黙（ボスの行動不能は1.5秒）", mana: 100, type: "signature", power: 560, scaling: "spell", fx: "shadow" },
   },
   {
     id: "swordsaint",
@@ -755,7 +755,7 @@ export const UNITS: UnitDef[] = [
     atkSpeed: 0.7,
     range: 2,
     armor: 42,
-    skill: { name: "終末火山", desc: "密集地へ連続噴火と燃焼を起こし、最後に盤面を覆う大噴火を放つ", mana: 100, type: "signature", power: 480, scaling: "spell", fx: "fire" },
+    skill: { name: "終末火山", desc: "密集地へ182ダメージの噴火を3回、半径2マスへ5秒燃焼、最後に360魔法ダメージ", mana: 100, type: "signature", power: 480, scaling: "spell", fx: "fire" },
   },
   // ===== アンロック制ユニット =====
   {
@@ -769,7 +769,7 @@ export const UNITS: UnitDef[] = [
     atkSpeed: 0.8,
     range: 3,
     armor: 15,
-    skill: { name: "灰より還る", desc: "対象周囲を炎上させ、自身に再生の炎を宿して再復活を可能にする", mana: 85, type: "signature", power: 320, scaling: "spell", fx: "fire" },
+    skill: { name: "灰より還る", desc: "対象周囲1マスへ320魔法ダメージ。自身へ144シールドを与え、亡霊の復活を再度1回可能にする", mana: 85, type: "signature", power: 320, scaling: "spell", fx: "fire" },
     unlock: "reach_act2",
   },
   {
@@ -783,7 +783,7 @@ export const UNITS: UnitDef[] = [
     atkSpeed: 0.65,
     range: 1,
     armor: 48,
-    skill: { name: "断層隆起", desc: "対象まで地面を裂き、敵を押し分けて短時間行動不能にする", mana: 85, type: "signature", power: 210, scaling: "attack", fx: "phys" },
+    skill: { name: "断層隆起", desc: "対象までの直線へ攻撃力189%の物理ダメージ。着地点周囲1マスを押し出し0.8秒行動不能", mana: 85, type: "signature", power: 210, scaling: "attack", fx: "phys" },
     unlock: "first_star3",
   },
   {
@@ -797,7 +797,7 @@ export const UNITS: UnitDef[] = [
     atkSpeed: 0.85,
     range: 3,
     armor: 12,
-    skill: { name: "狐火輪舞", desc: "狐火で敵を連撃し、傷ついた味方を守り、自身に幻影を残す", mana: 80, type: "signature", power: 330, scaling: "spell", fx: "fire" },
+    skill: { name: "狐火輪舞", desc: "敵へ79魔法ダメージを3回。HP割合最低の味方へ132シールド・99回復、自身は攻撃を1回無効化", mana: 80, type: "signature", power: 330, scaling: "spell", fx: "fire" },
     unlock: "wins30",
   },
   // ===== 記憶の祭壇で恒久解放 =====
@@ -826,7 +826,7 @@ export const UNITS: UnitDef[] = [
     atkSpeed: 0.7,
     range: 1,
     armor: 38,
-    skill: { name: "貪欲な偽装", desc: "敵を挑発して噛みつき、吸収した生命を回復とシールドへ変える", mana: 80, type: "signature", power: 230, scaling: "attack", fx: "shadow" },
+    skill: { name: "貪欲な偽装", desc: "対象を挑発し攻撃力230%の物理ダメージ。実ダメージの80%を回復し、最大HP25%までシールド化", mana: 80, type: "signature", power: 230, scaling: "attack", fx: "shadow" },
     unlock: "unit_mimic",
   },
   {
@@ -840,7 +840,7 @@ export const UNITS: UnitDef[] = [
     atkSpeed: 0.9,
     range: 1,
     armor: 34,
-    skill: { name: "英霊降下", desc: "倒れた味方の位置へ英霊を降ろし、敵を攻撃して味方を回復する", mana: 90, type: "signature", power: 330, scaling: "attack", fx: "holy" },
+    skill: { name: "英霊降下", desc: "倒れた味方最大3体の周囲へ攻撃力149%の物理ダメージ・116回復。死者不在なら味方全体の攻撃力+22%", mana: 90, type: "signature", power: 330, scaling: "attack", fx: "holy" },
     unlock: "unit_valkyrie",
   },
   {
@@ -854,45 +854,45 @@ export const UNITS: UnitDef[] = [
     atkSpeed: 0.72,
     range: 3,
     armor: 42,
-    skill: { name: "時代逆行", desc: "味方全員のHPとマナを大きく戻し、行動阻害をすべて解除する", mana: 110, type: "signature", power: 0, scaling: "spell", fx: "ice" },
+    skill: { name: "時代逆行", desc: "味方全体を最大HP35%+108回復し、最大マナ45%を回復。行動不能・鈍足・沈黙・恐怖を解除", mana: 110, type: "signature", power: 360, scaling: "spell", fx: "ice" },
     unlock: "unit_chronos",
   },
   // ===== 新13シナジー対応ユニット =====
-  { id: "soundseer", name: "音界の予言者", icon: "📯", cost: 3, traits: ["resonator", "constellation"], hp: 760, atk: 58, atkSpeed: 0.75, range: 4, armor: 14, skill: { name: "反響する静寂", desc: "最も遠い敵で音波を爆発させ、沈黙させた後に反射音で追撃", mana: 80, type: "signature", power: 280, scaling: "spell", fx: "bolt" }, unlock: "unit_soundseer" },
-  { id: "sawwright", name: "鋸歯技師", icon: "🪚", cost: 2, traits: ["clockwork", "dismantler"], hp: 720, atk: 72, atkSpeed: 0.85, range: 2, armor: 25, skill: { name: "回転破城鋸", desc: "敵のシールドを破壊し、破壊量に応じた追加ダメージ", mana: 65, type: "shieldBreak", power: 170, scaling: "attack", fx: "phys" }, unlock: "unit_sawwright" },
+  { id: "soundseer", name: "音界の予言者", icon: "📯", cost: 3, traits: ["resonator", "constellation"], hp: 760, atk: 58, atkSpeed: 0.75, range: 4, armor: 14, skill: { name: "反響する静寂", desc: "最遠の敵の周囲1マスへ280魔法ダメージと2.4秒沈黙。対象へ126追加ダメージ", mana: 80, type: "signature", power: 280, scaling: "spell", fx: "bolt" }, unlock: "unit_soundseer" },
+  { id: "sawwright", name: "鋸歯技師", icon: "🪚", cost: 2, traits: ["clockwork", "dismantler"], hp: 720, atk: 72, atkSpeed: 0.85, range: 2, armor: 25, skill: { name: "回転破城鋸", desc: "対象のシールドを100%破壊し、攻撃力170%+破壊量35%（最大400）の物理ダメージ", mana: 65, type: "shieldBreak", power: 170, scaling: "attack", fx: "phys" }, unlock: "unit_sawwright" },
   { id: "bloodspore", name: "血胞子", icon: "🍄", cost: 2, traits: ["parasite", "bloodpact"], hp: 840, atk: 48, atkSpeed: 0.7, range: 2, armor: 20, skill: { name: "自壊胞子", desc: "現在HP35%を消費し、周囲へ4秒間の毒を散布", mana: 70, type: "bloodPoison", power: 260, scaling: "spell", fx: "shadow" } },
-  { id: "portraitist", name: "幻描師", icon: "🖼️", cost: 3, traits: ["doppelganger"], hp: 700, atk: 54, atkSpeed: 0.7, range: 3, armor: 12, skill: { name: "生ける贋作", desc: "対象のスキルを模写し、贋作の一撃で対象の攻撃力も削る", mana: 85, type: "signature", power: 260, scaling: "spell", fx: "shadow" } },
-  { id: "gravitymarshal", name: "重圧参謀", icon: "🧭", cost: 3, traits: ["gravity", "commander"], hp: 900, atk: 40, atkSpeed: 0.5, range: 4, armor: 30, skill: { name: "重圧圧縮命令", desc: "敵を密集地へ圧縮し、行動を遅らせて中心を爆砕する", mana: 85, type: "signature", power: 260, scaling: "spell", fx: "shadow" } },
+  { id: "portraitist", name: "幻描師", icon: "🖼️", cost: 3, traits: ["doppelganger"], hp: 700, atk: 54, atkSpeed: 0.7, range: 3, armor: 12, skill: { name: "生ける贋作", desc: "対象のスキルを70%威力でコピーし、130魔法ダメージ。対象の攻撃力-10%", mana: 85, type: "signature", power: 260, scaling: "spell", fx: "shadow" } },
+  { id: "gravitymarshal", name: "重圧参謀", icon: "🧭", cost: 3, traits: ["gravity", "commander"], hp: 900, atk: 40, atkSpeed: 0.5, range: 4, armor: 30, skill: { name: "重圧圧縮命令", desc: "密集地から2マス以内の敵を中央へ引き寄せ3.5秒鈍足、中心周囲へ260魔法ダメージ", mana: 85, type: "signature", power: 260, scaling: "spell", fx: "shadow" } },
   { id: "astropotioner", name: "星薬師", icon: "🧪", cost: 3, traits: ["alchemist", "constellation"], hp: 730, atk: 44, atkSpeed: 0.7, range: 3, armor: 15, skill: { name: "双星霊薬", desc: "傷ついた味方2体を同時に大回復し、共有シールドを与える", mana: 75, type: "signature", power: 280, scaling: "spell", fx: "holy" } },
-  { id: "diceclown", name: "六面の悪戯師", icon: "🎰", cost: 3, traits: ["gambler", "jester"], hp: 720, atk: 76, atkSpeed: 0.9, range: 2, armor: 14, skill: { name: "運命の六面体", desc: "出目に応じて自傷・鈍足・毒・爆発・スタン・大当たりが発生", mana: 80, type: "signature", power: 300, scaling: "spell", fx: "shadow" }, unlock: "unit_diceclown" },
-  { id: "echorider", name: "霊響騎手", icon: "🏇", cost: 4, traits: ["ghost", "resonator"], hp: 1120, atk: 105, atkSpeed: 0.9, range: 1, armor: 28, skill: { name: "幽界疾駆・共鳴", desc: "最遠の敵へ疾駆し、通過した味方を守るほど斬撃の威力が上がる", mana: 80, type: "signature", power: 290, scaling: "attack", fx: "holy" }, unlock: "unit_echorider" },
-  { id: "mimiclarva", name: "擬態蟲", icon: "🦠", cost: 3, traits: ["doppelganger", "parasite"], hp: 820, atk: 64, atkSpeed: 0.8, range: 2, armor: 18, skill: { name: "同胞完全擬態", desc: "近くの味方のスキルを強く再現し、自身の攻撃と防御も成長する", mana: 85, type: "signature", power: 260, scaling: "spell", fx: "shadow" } },
-  { id: "bloodstandard", name: "血旗将", icon: "🚩", cost: 4, traits: ["commander", "bloodpact"], hp: 1450, atk: 48, atkSpeed: 0.5, range: 3, armor: 46, skill: { name: "血盟の不落旗", desc: "5秒間ダメージを肩代わりし、自身を守って血盟全員を強化する", mana: 90, type: "signature", power: 0, scaling: "spell", fx: "holy" } },
-  { id: "bloodwraith", name: "血刃の幽鬼", icon: "🧟‍♂️", cost: 4, traits: ["bloodpact", "ghost"], hp: 1200, atk: 118, atkSpeed: 0.85, range: 1, armor: 24, skill: { name: "紅月断", desc: "HPを捧げて直線を薙ぎ払い、盤面の血盟数に応じて威力上昇", mana: 75, type: "signature", power: 310, scaling: "attack", fx: "shadow" } },
-  { id: "skymantle", name: "天幕の巫女", icon: "🌃", cost: 3, traits: ["constellation"], hp: 740, atk: 45, atkSpeed: 0.68, range: 4, armor: 14, skill: { name: "星なき夜", desc: "敵全体の標的・射程を奪い、沈黙と鈍足を与える", mana: 95, type: "signature", power: 0, scaling: "spell", fx: "shadow" } },
-  { id: "rewinder", name: "巻戻し人形", icon: "⏪", cost: 4, traits: ["clockwork"], hp: 980, atk: 72, atkSpeed: 0.7, range: 3, armor: 32, skill: { name: "三秒前の残響", desc: "直近の味方を復活。死者がいなければ瀕死の味方のHPとマナを巻き戻す", mana: 110, type: "signature", power: 0, scaling: "spell", fx: "holy" }, unlock: "unit_rewinder" },
-  { id: "ironmeteor", name: "鉄球王", icon: "🔗", cost: 4, traits: ["dismantler", "gravity"], hp: 1420, atk: 112, atkSpeed: 0.7, range: 1, armor: 50, skill: { name: "装甲強奪突撃", desc: "密集地の防御を奪って爆砕し、奪った装甲を味方全員へ配る", mana: 90, type: "signature", power: 270, scaling: "attack", fx: "phys" }, unlock: "unit_ironmeteor" },
-  { id: "jackboxer", name: "箱庭の詐欺師", icon: "🎁", cost: 2, traits: ["jester", "gambler"], hp: 620, atk: 62, atkSpeed: 0.9, range: 3, armor: 12, skill: { name: "恐慌箱", desc: "対象周辺を爆破し、敵を恐怖状態にして逃走させる", mana: 70, type: "fearTrap", power: 190, scaling: "spell", fx: "fire" } },
-  { id: "conductor", name: "戦律の楽団長", icon: "🎼", cost: 4, traits: ["commander", "resonator"], hp: 980, atk: 42, atkSpeed: 0.5, range: 4, armor: 30, skill: { name: "魔力の再編曲", desc: "マナを均等化し、増えた味方は加速、減った味方にはシールドを付与", mana: 90, type: "signature", power: 160, scaling: "spell", fx: "bolt" }, unlock: "unit_conductor" },
-  { id: "corrosive", name: "腐食調合師", icon: "🧫", cost: 3, traits: ["parasite", "alchemist"], hp: 760, atk: 52, atkSpeed: 0.75, range: 3, armor: 16, skill: { name: "飛散腐食液", desc: "対象周囲へ腐食を飛散させ、攻撃・防御・攻撃速度をまとめて低下", mana: 75, type: "signature", power: 250, scaling: "spell", fx: "shadow" } },
+  { id: "diceclown", name: "六面の悪戯師", icon: "🎰", cost: 3, traits: ["gambler", "jester"], hp: 720, atk: 76, atkSpeed: 0.9, range: 2, armor: 14, skill: { name: "運命の六面体", desc: "1～6を振る。最大HP20%自傷／3.5秒鈍足／4秒毒／300範囲ダメージ／2.5秒スタン／900大ダメージ", mana: 80, type: "signature", power: 300, scaling: "spell", fx: "shadow" }, unlock: "unit_diceclown" },
+  { id: "echorider", name: "霊響騎手", icon: "🏇", cost: 4, traits: ["ghost", "resonator"], hp: 1120, atk: 105, atkSpeed: 0.9, range: 1, armor: 28, skill: { name: "幽界疾駆・共鳴", desc: "最遠の敵へ突進し攻撃力203%の斬撃。通過した味方1体につき威力+15%、各味方へ攻撃力131%のシールド", mana: 80, type: "signature", power: 290, scaling: "attack", fx: "holy" }, unlock: "unit_echorider" },
+  { id: "mimiclarva", name: "擬態蟲", icon: "🦠", cost: 3, traits: ["doppelganger", "parasite"], hp: 820, atk: 64, atkSpeed: 0.8, range: 2, armor: 18, skill: { name: "同胞完全擬態", desc: "最寄りの味方のスキルを90%威力でコピー。自身の攻撃力+15%・防御+10", mana: 85, type: "signature", power: 260, scaling: "spell", fx: "shadow" } },
+  { id: "bloodstandard", name: "血旗将", icon: "🚩", cost: 4, traits: ["commander", "bloodpact"], hp: 1450, atk: 48, atkSpeed: 0.5, range: 3, armor: 46, skill: { name: "血盟の不落旗", desc: "5秒間ダメージを肩代わりし、呪文威力に応じて自身を守って血盟全員を強化する", mana: 90, type: "signature", power: 300, scaling: "spell", fx: "holy" } },
+  { id: "bloodwraith", name: "血刃の幽鬼", icon: "🧟‍♂️", cost: 4, traits: ["bloodpact", "ghost"], hp: 1200, atk: 118, atkSpeed: 0.85, range: 1, armor: 24, skill: { name: "紅月断", desc: "最大HP18%を消費し、直線へ攻撃力310%の物理ダメージ。味方の血盟1体につき威力+12%", mana: 75, type: "signature", power: 310, scaling: "attack", fx: "shadow" } },
+  { id: "skymantle", name: "天幕の巫女", icon: "🌃", cost: 3, traits: ["constellation"], hp: 740, atk: 45, atkSpeed: 0.68, range: 4, armor: 14, skill: { name: "星なき夜", desc: "敵全体へ66魔法ダメージ、1.8秒沈黙・3秒鈍足・射程-2（最低1）。現在の標的を解除", mana: 95, type: "signature", power: 220, scaling: "spell", fx: "shadow" } },
+  { id: "rewinder", name: "巻戻し人形", icon: "⏪", cost: 4, traits: ["clockwork"], hp: 980, atk: 72, atkSpeed: 0.7, range: 3, armor: 32, skill: { name: "三秒前の残響", desc: "直近の味方1体を最大HP45%以上・マナ35%で復活。死者不在なら最大HP30%+160回復・マナ+30", mana: 110, type: "signature", power: 320, scaling: "spell", fx: "holy" }, unlock: "unit_rewinder" },
+  { id: "ironmeteor", name: "鉄球王", icon: "🔗", cost: 4, traits: ["dismantler", "gravity"], hp: 1420, atk: 112, atkSpeed: 0.7, range: 1, armor: 50, skill: { name: "装甲強奪突撃", desc: "密集地周囲1マスの敵から防御40%（1体最大30）を奪い、攻撃力270%+奪取量×4ダメージ。奪取分を味方全体へ均等配分", mana: 90, type: "signature", power: 270, scaling: "attack", fx: "phys" }, unlock: "unit_ironmeteor" },
+  { id: "jackboxer", name: "箱庭の詐欺師", icon: "🎁", cost: 2, traits: ["jester", "gambler"], hp: 620, atk: 62, atkSpeed: 0.9, range: 3, armor: 12, skill: { name: "恐慌箱", desc: "対象周囲1マスへ190魔法ダメージと1.5秒恐怖（ボスは0.5秒）", mana: 70, type: "fearTrap", power: 190, scaling: "spell", fx: "fire" } },
+  { id: "conductor", name: "戦律の楽団長", icon: "🎼", cost: 4, traits: ["commander", "resonator"], hp: 980, atk: 42, atkSpeed: 0.5, range: 4, armor: 30, skill: { name: "魔力の再編曲", desc: "味方のマナを均等化（最大90%）。増えた味方は攻撃速度+12%、減った味方は260シールド", mana: 90, type: "signature", power: 160, scaling: "spell", fx: "bolt" }, unlock: "unit_conductor" },
+  { id: "corrosive", name: "腐食調合師", icon: "🧫", cost: 3, traits: ["parasite", "alchemist"], hp: 760, atk: 52, atkSpeed: 0.75, range: 3, armor: 16, skill: { name: "飛散腐食液", desc: "対象周囲1マスへ138魔法ダメージ。命中した敵の攻撃力-22%、防御-40%、攻撃速度-20%", mana: 75, type: "signature", power: 250, scaling: "spell", fx: "shadow" } },
   { id: "corpseeater", name: "屍喰らい", icon: "🫀", cost: 3, traits: ["bloodpact"], hp: 1050, atk: 88, atkSpeed: 0.78, range: 1, armor: 28, skill: { name: "戦肉捕食", desc: "死体を食べてラン中の最大HP+60、戦闘中は攻撃力も吸収する", mana: 85, type: "signature", power: 220, scaling: "attack", fx: "shadow" } },
-  { id: "chronogravity", name: "時空重機", icon: "🕳️", cost: 5, traits: ["clockwork", "gravity"], hp: 1700, atk: 112, atkSpeed: 0.68, range: 3, armor: 52, skill: { name: "事象の地平線", desc: "成長する特異点へ広範囲の敵を吸引し、巻き込んだ数だけ大爆発が強化", mana: 105, type: "signature", power: 420, scaling: "spell", fx: "shadow" }, unlock: "unit_chronogravity" },
+  { id: "chronogravity", name: "時空重機", icon: "🕳️", cost: 5, traits: ["clockwork", "gravity"], hp: 1700, atk: 112, atkSpeed: 0.68, range: 3, armor: 52, skill: { name: "事象の地平線", desc: "密集地から3マス以内を吸引し、5秒鈍足・1.8秒沈黙。半径2マスへ420+巻き込んだ敵1体につき70魔法ダメージ", mana: 105, type: "signature", power: 420, scaling: "spell", fx: "shadow" }, unlock: "unit_chronogravity" },
   { id: "thousandface", name: "千面道化", icon: "🤡", cost: 4, traits: ["jester"], hp: 900, atk: 100, atkSpeed: 1.05, range: 1, armor: 20, skill: { name: "三つの災い顔", desc: "攻撃を3回無効化する分身を作り、敵陣へ爆発と恐怖を起こす", mana: 80, type: "signature", power: 280, scaling: "spell", fx: "shadow" } },
-  { id: "battlepicker", name: "戦場回収屋", icon: "🧲", cost: 3, traits: ["dismantler", "alchemist"], hp: 900, atk: 72, atkSpeed: 0.8, range: 2, armor: 30, skill: { name: "戦利品散布", desc: "ゴールド・全体回復・全体マナ・全体シールドのいずれかを配給", mana: 75, type: "signature", power: 180, scaling: "spell", fx: "holy" } },
-  { id: "nightcount", name: "夜血伯", icon: "🧛", cost: 5, traits: ["ghost"], hp: 1480, atk: 135, atkSpeed: 0.95, range: 1, armor: 34, skill: { name: "紅い夜", desc: "蝙蝠群となって敵全体から吸血し、吸収量で自身を強化して幻影を得る", mana: 90, type: "signature", power: 400, scaling: "spell", fx: "shadow" }, unlock: "unit_nightcount" },
-  { id: "knifecircus", name: "追奏の曲芸師", icon: "🤹", cost: 4, traits: ["jester", "resonator"], hp: 920, atk: 108, atkSpeed: 1, range: 3, armor: 18, skill: { name: "追奏短剣・狂詩曲", desc: "10秒間、味方のスキル発動ごとに追尾短剣を放ち自身も加速", mana: 85, type: "signature", power: 0, scaling: "attack", fx: "phys" } },
-  { id: "mirrorbetter", name: "鏡賭博師", icon: "🪙", cost: 5, traits: ["gambler", "doppelganger"], hp: 1250, atk: 120, atkSpeed: 0.85, range: 3, armor: 30, skill: { name: "運命反転", desc: "敵の最強者と味方の弱者の攻撃・防御を反転し、敵へ追撃する", mana: 100, type: "signature", power: 300, scaling: "spell", fx: "shadow" }, unlock: "unit_mirrorbetter" },
+  { id: "battlepicker", name: "戦場回収屋", icon: "🧲", cost: 3, traits: ["dismantler", "alchemist"], hp: 900, atk: 72, atkSpeed: 0.8, range: 2, armor: 30, skill: { name: "戦利品散布", desc: "等確率で戦闘後+1G（最大3G）／味方全体99回復／マナ+18／90シールドのいずれかを配給", mana: 75, type: "signature", power: 180, scaling: "spell", fx: "holy" } },
+  { id: "nightcount", name: "夜血伯", icon: "🧛", cost: 5, traits: ["ghost"], hp: 1480, atk: 135, atkSpeed: 0.95, range: 1, armor: 34, skill: { name: "紅い夜", desc: "敵全体へ128魔法ダメージ・2秒鈍足、実ダメージの70%を回復。攻撃力最大+50%、攻撃速度+18%、攻撃を2回無効化", mana: 90, type: "signature", power: 400, scaling: "spell", fx: "shadow" }, unlock: "unit_nightcount" },
+  { id: "knifecircus", name: "追奏の曲芸師", icon: "🤹", cost: 4, traits: ["jester", "resonator"], hp: 920, atk: 108, atkSpeed: 1, range: 3, armor: 18, skill: { name: "追奏短剣・狂詩曲", desc: "攻撃力参照の短剣を投げ、10秒間味方のスキル発動ごとに追尾短剣を放って自身も加速", mana: 85, type: "signature", power: 220, scaling: "attack", fx: "phys" } },
+  { id: "mirrorbetter", name: "鏡賭博師", icon: "🪙", cost: 5, traits: ["gambler", "doppelganger"], hp: 1250, atk: 120, atkSpeed: 0.85, range: 3, armor: 30, skill: { name: "運命反転", desc: "攻撃力最高の敵を味方最低値の80%へ下げ、味方を敵元値の85%へ強化。敵防御50%を奪い165魔法ダメージ", mana: 100, type: "signature", power: 300, scaling: "spell", fx: "shadow" }, unlock: "unit_mirrorbetter" },
   // ===== 最大閾値到達用の追加10体 =====
   { id: "pulsegear", name: "脈動機関", icon: "💓", cost: 2, traits: ["resonator", "clockwork"], hp: 700, atk: 58, atkSpeed: 0.8, range: 2, armor: 24, skill: { name: "加速脈動", desc: "味方全体の攻撃力を18%強化", mana: 70, type: "warcry", power: 18, scaling: "spell", fx: "bolt" } },
-  { id: "starbell", name: "星鐘奏者", icon: "🔔", cost: 3, traits: ["resonator", "constellation"], hp: 720, atk: 54, atkSpeed: 0.72, range: 4, armor: 14, skill: { name: "三響の星鐘", desc: "攻撃・味方回復・敵全体の沈黙を三つの鐘で順番に起こす", mana: 80, type: "signature", power: 280, scaling: "spell", fx: "holy" } },
+  { id: "starbell", name: "星鐘奏者", icon: "🔔", cost: 3, traits: ["resonator", "constellation"], hp: 720, atk: 54, atkSpeed: 0.72, range: 4, armor: 14, skill: { name: "三響の星鐘", desc: "対象周囲1マスへ140魔法ダメージ、味方全体を70回復、敵全体を1秒沈黙", mana: 80, type: "signature", power: 280, scaling: "spell", fx: "holy" } },
   { id: "calendarengine", name: "暦算機", icon: "📅", cost: 3, traits: ["clockwork", "constellation"], hp: 860, atk: 68, atkSpeed: 0.72, range: 3, armor: 28, skill: { name: "必中未来落星", desc: "攻撃力の高い敵3体の未来を予測して落星し、マナを奪い返す", mana: 85, type: "signature", power: 270, scaling: "spell", fx: "bolt" } },
-  { id: "timeanchor", name: "時縛りの錨", icon: "⚓", cost: 4, traits: ["clockwork", "gravity"], hp: 1350, atk: 92, atkSpeed: 0.65, range: 2, armor: 46, skill: { name: "因果固定の錨", desc: "密集地を固定し、範囲ダメージ・長時間拘束・マナ減少を与える", mana: 90, type: "signature", power: 350, scaling: "spell", fx: "ice" } },
+  { id: "timeanchor", name: "時縛りの錨", icon: "⚓", cost: 4, traits: ["clockwork", "gravity"], hp: 1350, atk: 92, atkSpeed: 0.65, range: 2, armor: 46, skill: { name: "因果固定の錨", desc: "密集地周囲1マスへ245魔法ダメージ、2.8秒拘束（ボス1秒）・マナ-25", mana: 90, type: "signature", power: 350, scaling: "spell", fx: "ice" } },
   { id: "bloodmoonorb", name: "血月衛星", icon: "🌘", cost: 4, traits: ["gravity", "bloodpact"], hp: 1400, atk: 85, atkSpeed: 0.65, range: 2, armor: 45, skill: { name: "巡る血月障壁", desc: "傷ついた味方3体へ厚い障壁を巡らせ、十分なら敵陣へ血月砲を放つ", mana: 90, type: "signature", power: 290, scaling: "spell", fx: "shadow" } },
-  { id: "astralblood", name: "星血の司祭", icon: "✴️", cost: 4, traits: ["constellation", "bloodpact"], hp: 1100, atk: 62, atkSpeed: 0.68, range: 3, armor: 28, skill: { name: "星血均衡", desc: "味方全員のHP比率を均し、その後に全体回復する", mana: 90, type: "signature", power: 320, scaling: "spell", fx: "holy" } },
-  { id: "voidspore", name: "奈落胞子", icon: "🧬", cost: 3, traits: ["gravity", "parasite"], hp: 900, atk: 64, atkSpeed: 0.72, range: 3, armor: 22, skill: { name: "奈落重力胞子", desc: "長い猛毒を植え、周囲の敵を宿主へ引き寄せて減速させる", mana: 75, type: "signature", power: 360, scaling: "spell", fx: "shadow" } },
-  { id: "soulchemist", name: "霊薬の賢者", icon: "🍶", cost: 4, traits: ["alchemist", "ghost"], hp: 1050, atk: 68, atkSpeed: 0.7, range: 3, armor: 26, skill: { name: "魂の万能薬", desc: "戦況に合わせて全体回復・範囲毒・味方加速の薬を自動選択", mana: 85, type: "signature", power: 320, scaling: "spell", fx: "holy" } },
-  { id: "doublegambler", name: "双貌の勝負師", icon: "🌓", cost: 4, traits: ["gambler", "doppelganger"], hp: 980, atk: 96, atkSpeed: 0.85, range: 2, armor: 24, skill: { name: "双貌の大勝負", desc: "味方か敵のスキルを賭けで選び、高威力でコピーする", mana: 85, type: "signature", power: 300, scaling: "spell", fx: "shadow" } },
-  { id: "siegecommander", name: "攻城参謀", icon: "🏗️", cost: 4, traits: ["commander", "dismantler"], hp: 1250, atk: 45, atkSpeed: 0.5, range: 4, armor: 42, skill: { name: "総攻城命令", desc: "最も堅い敵を攻略目標にし、防御を削って味方全員に集中攻撃させる", mana: 90, type: "signature", power: 0, scaling: "spell", fx: "phys" } },
+  { id: "astralblood", name: "星血の司祭", icon: "✴️", cost: 4, traits: ["constellation", "bloodpact"], hp: 1100, atk: 62, atkSpeed: 0.68, range: 3, armor: 28, skill: { name: "星血均衡", desc: "味方全体のHP割合を平均値へ50%近づけ、その後全員を176回復", mana: 90, type: "signature", power: 320, scaling: "spell", fx: "holy" } },
+  { id: "voidspore", name: "奈落胞子", icon: "🧬", cost: 3, traits: ["gravity", "parasite"], hp: 900, atk: 64, atkSpeed: 0.72, range: 3, armor: 22, skill: { name: "奈落重力胞子", desc: "対象へ5秒間で360魔法ダメージ。周囲2マスの敵を引き寄せ2.5秒鈍足", mana: 75, type: "signature", power: 360, scaling: "spell", fx: "shadow" } },
+  { id: "soulchemist", name: "霊薬の賢者", icon: "🍶", cost: 4, traits: ["alchemist", "ghost"], hp: 1050, atk: 68, atkSpeed: 0.7, range: 3, armor: 26, skill: { name: "魂の万能薬", desc: "HP35%未満がいれば全体320回復。敵密集時は320範囲ダメージ+3秒毒。それ以外は攻撃速度+18%・マナ+18", mana: 85, type: "signature", power: 320, scaling: "spell", fx: "holy" } },
+  { id: "doublegambler", name: "双貌の勝負師", icon: "🌓", cost: 4, traits: ["gambler", "doppelganger"], hp: 980, atk: 96, atkSpeed: 0.85, range: 2, armor: 24, skill: { name: "双貌の大勝負", desc: "55%で味方のスキルを90%威力、失敗時は敵のスキルを75%威力でコピー。コピー系スキルなら300魔法ダメージ", mana: 85, type: "signature", power: 300, scaling: "spell", fx: "shadow" } },
+  { id: "siegecommander", name: "攻城参謀", icon: "🏗️", cost: 4, traits: ["commander", "dismantler"], hp: 1250, atk: 45, atkSpeed: 0.5, range: 4, armor: 42, skill: { name: "総攻城命令", desc: "最も堅い敵の防御-50%。味方全体の攻撃力+18%・78シールドを付与し、その敵へ集中攻撃", mana: 90, type: "signature", power: 260, scaling: "spell", fx: "phys" } },
 ];
 
 export const UNIT_BY_ID = new Map(UNITS.map((u) => [u.id, u]));

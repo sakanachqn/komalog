@@ -12,7 +12,7 @@ import { enemyTeamFor } from "./data/enemies";
 import { ANCIENT_RELIC_BY_ID, rollAncientRelicChoices } from "./data/ancientRelics";
 import { BASE_ITEM_IDS, CRAFT_RECIPES, ITEMS, ITEM_BY_ID, RELIC_BY_ID, craftResult, rollItem, rollRelicChoices } from "./data/relics";
 import { TRAITS, UNITS, UNIT_BY_ID, rollUnitDef } from "./data/units";
-import { clearSave, loadGame, saveGame } from "./save";
+import { loadGame, saveGame } from "./save";
 import type { SaveData } from "./save";
 import { isMuted, sfx, toggleMute } from "./sound";
 import { ASC_LEVELS, MAX_ASC, ascMods } from "./ascension";
@@ -38,6 +38,8 @@ import {
 import { generateMap } from "./map";
 import type { EnemyDef, MapNode, OwnedUnit, RunState, TraitId, UnitDef } from "./types";
 import { itemArt, synergyArt, unitArt } from "./artIcons";
+import { tagEnemyTooltip } from "./hoverTooltip";
+import { gameSettings, updateSettings } from "./settings";
 
 /* ================= ヘルパー ================= */
 
@@ -77,13 +79,144 @@ function showAbandonConfirm(onConfirm: () => void): void {
   document.body.appendChild(overlay);
 }
 
+function showSettings(): void {
+  if (document.querySelector(".settings-overlay")) return;
+  const overlay = el("div", "modal-overlay settings-overlay");
+  const panel = el("div", "modal-panel settings-panel");
+  const head = el("div", "modal-head");
+  head.append(el("h2", "", "⚙️ 設定"), btn("✕", "modal-close", () => overlay.remove()));
+  const body = el("div", "settings-body");
+  const volumeRow = el("label", "setting-row");
+  const volumeText = el("span", "", `効果音の音量 ${Math.round(gameSettings().volume * 100)}%`);
+  const volume = document.createElement("input");
+  volume.type = "range"; volume.min = "0"; volume.max = "100"; volume.value = String(Math.round(gameSettings().volume * 100));
+  volume.addEventListener("input", () => { volumeText.textContent = `効果音の音量 ${volume.value}%`; updateSettings({ volume: Number(volume.value) / 100 }); });
+  volumeRow.append(volumeText, volume);
+  const toggleRow = (label: string, desc: string, checked: boolean, onChange: (value: boolean) => void) => {
+    const row = el("label", "setting-toggle");
+    const copy = el("span"); copy.append(el("b", "", label), el("small", "", desc));
+    const input = document.createElement("input"); input.type = "checkbox"; input.checked = checked;
+    input.addEventListener("change", () => onChange(input.checked));
+    row.append(copy, input); return row;
+  };
+  body.append(
+    volumeRow,
+    toggleRow("画面揺れ", "クリティカルや大技で盤面を揺らす", gameSettings().screenShake, (value) => updateSettings({ screenShake: value })),
+    toggleRow("演出を軽減", "閃光・衝撃波・細かなパーティクルを減らす", gameSettings().reducedEffects, (value) => updateSettings({ reducedEffects: value })),
+  );
+  panel.append(head, body, btn("閉じる", "primary", () => overlay.remove()));
+  overlay.appendChild(panel);
+  overlay.addEventListener("click", (event) => { if (event.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+}
+
+function showTutorial(): void {
+  if (document.querySelector(".tutorial-overlay")) return;
+  const overlay = el("div", "modal-overlay tutorial-overlay");
+  const panel = el("div", "modal-panel tutorial-panel");
+  const head = el("div", "modal-head");
+  head.append(el("h2", "", "🎓 はじめての実戦"), btn("✕", "modal-close", () => overlay.remove()));
+  const progress = el("div", "tutorial-progress");
+  const body = el("div", "tutorial-body");
+  const foot = el("div", "tutorial-foot");
+  let step = 0;
+  let gold = 5;
+  let bought = false;
+  let placed = false;
+
+  const setProgress = () => {
+    progress.replaceChildren(...Array.from({ length: 6 }, (_, i) => {
+      const dot = el("span", i === step ? "active" : i < step ? "done" : "", String(i + 1));
+      return dot;
+    }));
+  };
+  const next = (label = "次へ") => btn(label, "primary", () => { step++; render(); });
+  const note = (text: string) => el("p", "tutorial-note", text);
+
+  const render = () => {
+    setProgress(); body.replaceChildren(); foot.replaceChildren();
+    if (step === 0) {
+      body.append(
+        el("h3", "", "1. マップで次の行き先を選ぶ"),
+        note("このゲームは、マスを選んで進む全3幕のローグライトです。HPが0になる前に各幕のボス撃破を目指します。"),
+      );
+      const map = el("div", "tutorial-map");
+      map.append(el("span", "done", "⚔️"), el("i", ""), el("span", "choice", "🛒"), el("i", ""), el("span", "", "👹"));
+      body.append(map, el("div", "tutorial-legend", "⚔️ 戦闘　 🛒 ショップ　 ？ イベント　 🔥 エリート　 👹 ボス"));
+      foot.append(next());
+    } else if (step === 1) {
+      body.append(el("h3", "", "2. ショップで仲間を雇う"), note("ユニットにはコスト・特性・スキルがあります。同じユニットを3体集めると★2になり、さらに3体分集めると★3になります。"));
+      const wallet = el("div", "tutorial-wallet", `💰 ${gold}G`);
+      const shop = el("div", "tutorial-shop-card");
+      shop.append(el("b", "", "🤺 剣士"), el("span", "", "1コスト・戦士"), el("small", "", "前方を斬りつけて物理ダメージ"));
+      const buy = btn(bought ? "購入済み" : "1Gで購入", bought ? "" : "primary", () => {
+        if (bought) return; bought = true; gold--; wallet.textContent = `💰 ${gold}G`; buy.textContent = "購入済み"; buy.disabled = true;
+        foot.replaceChildren(next("編成へ"));
+      });
+      shop.appendChild(buy); body.append(wallet, shop);
+      if (!bought) foot.append(note("「1Gで購入」を押してみよう")); else foot.append(next("編成へ"));
+    } else if (step === 2) {
+      body.append(el("h3", "", "3. 盤面にドラッグして配置する"), note("緑側が味方の配置エリアです。前衛は前、遠距離や支援役は後ろが基本。ユニットの移動・入れ替え・ベンチ整理はドラッグ＆ドロップで行います。"));
+      const guide = el("div", "tutorial-guide", placed ? "配置成功！ 前衛が敵を受け止めます" : "下の剣士を光っているマスへドラッグしよう");
+      const field = el("div", "tutorial-field");
+      const enemy = el("div", "tutorial-enemy", "👺");
+      const target = el("div", "tutorial-target", "前衛マス");
+      field.append(enemy, target);
+      const bench = el("div", "tutorial-bench");
+      const unit = el("div", "tutorial-unit", "🤺"); unit.title = "剣士（戦士）";
+      bench.append(el("span", "", "ベンチ"), unit);
+      if (placed) { target.textContent = ""; target.appendChild(unit); unit.classList.add("placed"); }
+      let dragging = false; let dragStart = { x: 0, y: 0 };
+      unit.addEventListener("pointerdown", (event) => { dragging = true; dragStart = { x: event.clientX, y: event.clientY }; unit.setPointerCapture(event.pointerId); unit.classList.add("dragging"); });
+      unit.addEventListener("pointermove", (event) => { if (dragging) unit.style.transform = `translate(${event.clientX - dragStart.x}px, ${event.clientY - dragStart.y}px)`; });
+      unit.addEventListener("pointerup", (event) => {
+        if (!dragging) return; dragging = false; unit.releasePointerCapture(event.pointerId); unit.classList.remove("dragging"); unit.style.transform = "";
+        const box = target.getBoundingClientRect();
+        if (event.clientX >= box.left - 35 && event.clientX <= box.right + 35 && event.clientY >= box.top - 35 && event.clientY <= box.bottom + 35) { placed = true; target.textContent = ""; target.appendChild(unit); unit.classList.add("placed"); guide.textContent = "配置成功！ 前衛が敵を受け止めます"; foot.replaceChildren(next()); }
+      });
+      body.append(guide, field, bench); if (placed) foot.append(next());
+    } else if (step === 3) {
+      body.append(el("h3", "", "4. シナジーと装備で編成を強くする"), note("盤面上に同じ特性を持つ仲間を必要数並べるとシナジーが発動します。右側の一覧では、黄色の数字まで効果が発動していることを示します。"));
+      const trait = el("div", "tutorial-trait-card");
+      trait.innerHTML = `<b>⚔️ 戦士 <span>(<em>2</em>/4/6):2</span></b><p>戦士の攻撃力と防御力が上昇</p><div><strong>発動中</strong> 2体効果：攻撃力 +15%、アーマー +10</div>`;
+      const tips = el("div", "tutorial-tip-grid");
+      tips.append(el("span", "", "🗡️ 剣系アイテム\n攻撃力参照スキルと好相性"), el("span", "", "🪄 杖系アイテム\n呪文威力参照スキルと好相性"));
+      body.append(trait, tips, note("アイテムはユニットへドラッグして装備できます。通常アイテム2個は合成工房で強力な合成アイテムにもできます。")); foot.append(next());
+    } else if (step === 4) {
+      body.append(el("h3", "", "5. 戦闘は自動。始める前の準備が勝負"), note("戦闘中は自動で移動・通常攻撃・スキル発動を行います。速度は1～3倍に変更でき、選んだ速度は次の戦闘にも引き継がれます。"));
+      const field = el("div", "tutorial-field battle-demo");
+      const enemy = el("div", "tutorial-enemy", "👺"); const unit = el("div", "tutorial-unit placed", "🤺"); const mana = el("div", "tutorial-mana", "マナ 40 / 100");
+      field.append(enemy, unit, mana); body.append(field);
+      const start = btn("⚔️ 戦闘開始", "primary", () => {
+        start.disabled = true; start.textContent = "戦闘中…"; unit.classList.add("tutorial-attacking"); enemy.classList.add("tutorial-defeated");
+        setTimeout(() => { start.textContent = "勝利！"; foot.replaceChildren(next("報酬を受け取る")); }, gameSettings().reducedEffects ? 250 : 850);
+      }); body.appendChild(start);
+    } else {
+      body.append(el("h3", "", "6. 勝利報酬を選び、次の戦いへ"), note("戦闘後はゴールドやユニットなど、今の編成に合う報酬を選びます。ショップ・イベント・レリックも利用しながらビルドを完成させましょう。"));
+      const rewards = el("div", "tutorial-rewards");
+      rewards.append(el("button", "selected", "💰 5G\n安定した買い物資金"), el("button", "", "🤺 剣士\n★強化を狙う"), el("button", "", "🎁 アイテム\nエースを強化"));
+      for (const reward of rewards.querySelectorAll("button")) reward.addEventListener("click", () => { rewards.querySelectorAll("button").forEach((b) => b.classList.remove("selected")); reward.classList.add("selected"); });
+      body.append(rewards, el("div", "tutorial-final-tips", "覚えておくと便利：ユニットやシナジーにカーソルを合わせると詳細を確認できます。困ったときは右上の「？」から遊び方をいつでも開けます。"));
+      foot.append(btn("チュートリアル完了", "primary", () => overlay.remove()));
+    }
+  };
+  panel.append(head, progress, body, foot);
+  overlay.appendChild(panel); document.body.appendChild(overlay);
+  render();
+}
+
 function hud(run: RunState, onAbandon?: () => void): HTMLElement {
   const h = el("div", "hud");
-  h.append(
-    el("span", "hp", `❤️ ${run.playerHp}/${run.playerMaxHp}`),
-    el("span", "gold", `💰 ${run.gold}G`),
-    el("span", "", `第${run.act}幕 ${Math.min(run.floorIndex + 1, FLOOR_COUNT)}/${FLOOR_COUNT}`),
+  const progress = Math.min(100, ((run.floorIndex + 1) / FLOOR_COUNT) * 100);
+  const journey = el("span", "hud-journey");
+  journey.append(
+    el("b", "", `第${run.act}幕`),
+    el("small", "", `${Math.min(run.floorIndex + 1, FLOOR_COUNT)} / ${FLOOR_COUNT}`),
   );
+  const progressTrack = el("i", "hud-progress");
+  progressTrack.style.setProperty("--progress", `${progress}%`);
+  journey.appendChild(progressTrack);
+  h.append(journey, el("span", "hp", `❤️ ${run.playerHp}/${run.playerMaxHp}`), el("span", "gold", `💰 ${run.gold}G`));
   if (run.potions.length > 0) h.appendChild(el("span", "", `⚗️ ${run.potions.length}`));
   if (run.scrap > 0) h.appendChild(el("span", "", `🔧 ${run.scrap}/5`));
   if (run.relics.length > 0) {
@@ -116,6 +249,10 @@ function hud(run: RunState, onAbandon?: () => void): HTMLElement {
   helpBtn.title = "遊び方を見る";
   helpBtn.addEventListener("click", () => showHelp());
   h.appendChild(helpBtn);
+  const settingsBtn = el("button", "mute-btn", "⚙️");
+  settingsBtn.title = "設定を開く";
+  settingsBtn.addEventListener("click", showSettings);
+  h.appendChild(settingsBtn);
   const muteBtn = el("button", "mute-btn", isMuted() ? "🔇" : "🔊");
   muteBtn.title = "効果音のオン/オフ";
   muteBtn.addEventListener("click", () => {
@@ -134,6 +271,10 @@ function cellPos(x: number, y: number): { left: string; top: string } {
 
 function starsText(star: number): string {
   return "★".repeat(star);
+}
+
+function skillScalingLabel(scaling: UnitDef["skill"]["scaling"]): string {
+  return scaling === "attack" ? "⚔️ 攻撃力参照" : "🔮 呪文威力参照";
 }
 
 /** 7x8 の盤面グリッドを作る。cells[y][x] でセル要素にアクセス */
@@ -198,6 +339,8 @@ function traitPanel(board: OwnedUnit[]): HTMLElement {
   for (const s of statuses) {
     const info = TRAITS[s.trait];
     const row = el("div", `trait-row ${s.tier > 0 ? "active" : "inactive"}`);
+    row.dataset.traitTooltip = s.trait;
+    row.dataset.traitTier = String(s.tier);
 
     // 「⚔️ 戦士 (2/4/6):3」形式。達成済みの閾値だけ色を変える
     const label = el("span", "trait-name");
@@ -431,7 +574,7 @@ export function showCompendium(initialTab: CompendiumTab = "units") {
             `<span class="compendium-icon"></span><b>${def.name} <em>コスト${def.cost}</em></b>` +
             `<small>${def.traits.map((t) => `${TRAITS[t].icon}${TRAITS[t].name}`).join("　")}</small>` +
             `<span class="compendium-stats">HP ${def.hp}　攻撃 ${def.atk}　防御 ${def.armor}<br>速度 ${def.atkSpeed.toFixed(2)}　射程 ${rangeLabel(def.range)}</span>` +
-            `<span class="compendium-skill"><b>${def.skill.name}</b>　${def.skill.desc}<br>必要マナ ${def.skill.mana}</span>`;
+            `<span class="compendium-skill"><b>${def.skill.name}</b> <em class="skill-scaling ${def.skill.scaling}">${skillScalingLabel(def.skill.scaling)}</em><br>${def.skill.desc}<br>必要マナ ${def.skill.mana}</span>`;
           card.querySelector(".compendium-icon")!.appendChild(unitArt(def));
         }
         grid.appendChild(card);
@@ -594,14 +737,17 @@ function withTraitSide(
 
 export function renderTitle(): HTMLElement {
   const s = el("div", "title-screen");
-  s.appendChild(el("h1", "", "⚔️ コマログ"));
-  s.appendChild(el("div", "tagline", "― 駒を並べて、魔王まで ―"));
+  const layout = el("div", "title-layout");
+  const hero = el("section", "title-hero");
+  const menu = el("section", "title-menu");
+  hero.appendChild(el("h1", "", "⚔️ コマログ"));
+  hero.appendChild(el("div", "tagline", "― 駒を並べて、魔王まで ―"));
   const p = el("p");
   p.innerHTML =
     "ユニット（駒）を集めて盤面に配置し、自動戦闘で敵を倒せ。<br>" +
     "全3幕の分岐マップを進み、最後に待つ<b>魔王</b>を討伐するのが目標だ。<br>" +
     "同じユニットを3体集めると星が上がって強化される。";
-  s.appendChild(p);
+  hero.appendChild(p);
 
   // 通算記録
   const m = meta();
@@ -615,9 +761,18 @@ export function renderTitle(): HTMLElement {
     if (m.records.ascBest >= 0) parts.push(`最高段位 ${m.records.ascBest}`);
     parts.push(`実績 ${m.unlocks.length}/${Object.keys(UNLOCK_INFO).length}`);
     stats.textContent = `📜 ${parts.join(" ／ ")}`;
-    s.appendChild(stats);
+    hero.appendChild(stats);
   }
-  s.appendChild(el("div", "memory-balance", `🔹 記憶の欠片 ${m.memoryShards}`));
+  hero.appendChild(el("div", "memory-balance", `🔹 記憶の欠片 ${m.memoryShards}`));
+  const nextLegacy = LEGACY_UPGRADES
+    .filter((up) => !hasLegacy(up.id) && (!up.requires || hasLegacy(up.requires)))
+    .sort((a, b) => a.cost - b.cost)[0];
+  if (nextLegacy) {
+    const goal = el("div", "next-goal");
+    const remaining = Math.max(0, nextLegacy.cost - m.memoryShards);
+    goal.innerHTML = `<small>次の記憶</small><b>${nextLegacy.icon} ${nextLegacy.name}</b><span>${nextLegacy.desc}</span><em>${remaining === 0 ? "解放できます" : `あと 🔹${remaining}`}</em>`;
+    hero.appendChild(goal);
+  }
   const compendiumButton = btn("📚 図鑑", "title-compendium", () => showCompendium());
   s.appendChild(compendiumButton);
 
@@ -625,17 +780,23 @@ export function renderTitle(): HTMLElement {
   const actions = el("div", "title-actions");
   const playRow = el("div", "toolbar title-action-row");
   if (save) {
-    playRow.appendChild(
-      btn(`▶ 続きから（第${save.run.act}幕 フロア${save.run.floorIndex + 1}）`, "primary", () => {
-        ctx.run = save.run;
-        ctx.battleSpeed = save.battleSpeed || 1;
-        resumeFrom(save);
-      }),
+    const continueBtn = btn("", "primary title-continue", () => {
+      ctx.run = save.run;
+      ctx.battleSpeed = save.battleSpeed || 1;
+      resumeFrom(save);
+    });
+    continueBtn.append(
+      el("span", "", "▶ 続きから"),
+      el("small", "", `（第${save.run.act}幕 フロア${save.run.floorIndex + 1}）`),
     );
+    playRow.appendChild(continueBtn);
     playRow.appendChild(
       btn("最初から", "", () => {
-        clearSave();
-        go({ kind: "starter" });
+        // タイトルからランを破棄した場合も「諦める」と同じ終了処理を通し、
+        // 到達度に応じた記憶の欠片を受け取れるようにする。
+        ctx.run = save.run;
+        ctx.battleSpeed = save.battleSpeed || 1;
+        go({ kind: "gameover", win: false, abandoned: true });
       }),
     );
   } else {
@@ -643,15 +804,19 @@ export function renderTitle(): HTMLElement {
   }
   const sanctuaryRow = el("div", "toolbar title-action-row");
   sanctuaryRow.appendChild(btn("🔮 記憶の祭壇", "", () => showLegacySanctum()));
+  sanctuaryRow.appendChild(btn("🎓 チュートリアル", "", () => showTutorial()));
   const infoRow = el("div", "toolbar title-action-row");
   infoRow.appendChild(btn("📖 遊び方", "", () => showHelp()));
+  infoRow.appendChild(btn("⚙️ 設定", "", () => showSettings()));
   infoRow.appendChild(
     btn("💬 感想を送る", "", () => {
       window.open(FEEDBACK_FORM_URL, "_blank", "noopener,noreferrer");
     }),
   );
   actions.append(playRow, sanctuaryRow, infoRow);
-  s.appendChild(actions);
+  menu.append(el("h2", "", save ? "冒険を再開" : "新しい冒険"), actions);
+  layout.append(hero, menu);
+  s.appendChild(layout);
   return s;
 }
 
@@ -1149,6 +1314,7 @@ export function renderPrepare(node: MapNode): HTMLElement {
       const hp = Math.round(sp.def.hp * ctx.enemyTeam!.scale * em.hp);
       const atk = Math.round(sp.def.atk * ctx.enemyTeam!.scale * em.atk);
       u.title = `${sp.def.name}\nHP ${hp} / 攻撃 ${atk}${sp.def.skill ? `\nスキル: ${sp.def.skill.name}` : ""}`;
+      tagEnemyTooltip(u, sp.def);
       if (idx === selectedEnemy) u.classList.add("selected");
       u.addEventListener("click", () => {
         if (justDragged) return;
@@ -1415,7 +1581,7 @@ function unitInfoPanel(ou: OwnedUnit, onSell: () => void, onUnequip?: () => void
     ["特性", def.traits.map((t) => `${TRAITS[t].icon}${TRAITS[t].name}`).join(" ")],
   ]);
   const skill = el("div", "skill");
-  skill.innerHTML = `<b>${def.skill.name}</b>（マナ${def.skill.mana}）<br>${def.skill.desc}`;
+  skill.innerHTML = `<b>${def.skill.name}</b> <em class="skill-scaling ${def.skill.scaling}">${skillScalingLabel(def.skill.scaling)}</em>（マナ${def.skill.mana}）<br>${def.skill.desc}`;
   p.appendChild(skill);
   if (ou.item) {
     const d = ITEM_BY_ID.get(ou.item)!;
@@ -1446,7 +1612,7 @@ function enemyInfoPanel(def: EnemyDef, scale: number, em: ReturnType<typeof enem
   ]);
   const skill = el("div", "skill");
   if (def.skill) {
-    skill.innerHTML = `<b>${def.skill.name}</b>（マナ${def.skill.mana}）<br>${def.skill.desc}`;
+    skill.innerHTML = `<b>${def.skill.name}</b> <em class="skill-scaling ${def.skill.scaling}">${skillScalingLabel(def.skill.scaling)}</em>（マナ${def.skill.mana}）<br>${def.skill.desc}`;
   } else {
     skill.innerHTML = `<span style="opacity:.7">スキルなし（通常攻撃のみ）</span>`;
   }
@@ -1478,7 +1644,7 @@ export function renderBattle(node: MapNode): HTMLElement {
   // ユニット要素
   const unitEls = new Map<
     number,
-    { root: HTMLElement; hp: HTMLElement; shield: HTMLElement; mana: HTMLElement | null }
+    { root: HTMLElement; hp: HTMLElement; shield: HTMLElement; mana: HTMLElement | null; hpText: HTMLElement; statuses: HTMLElement }
   >();
   for (const cu of battle.units) {
     const u = el("div", `unit ${cu.side}`);
@@ -1486,6 +1652,10 @@ export function renderBattle(node: MapNode): HTMLElement {
     u.style.left = pos.left;
     u.style.top = pos.top;
     u.title = cu.name;
+    if (cu.side === "enemy") {
+      const enemyDef = ctx.enemyTeam?.spawns.find((spawn) => spawn.def.name === cu.name)?.def;
+      if (enemyDef) tagEnemyTooltip(u, enemyDef);
+    }
     const combatIcon = el("div", "icon", cu.icon);
     if (cu.side === "ally") {
       const def = UNITS.find((candidate) => candidate.name === cu.name);
@@ -1496,7 +1666,8 @@ export function renderBattle(node: MapNode): HTMLElement {
     const hpBar = el("div", "bar hp");
     const hpFill = el("i", "fill-hp");
     const shieldFill = el("i", "fill-shield");
-    hpBar.append(hpFill, shieldFill);
+    const hpText = el("span", "bar-label");
+    hpBar.append(hpFill, shieldFill, hpText);
     bars.appendChild(hpBar);
     let manaFill: HTMLElement | null = null;
     if (cu.skill) {
@@ -1505,9 +1676,10 @@ export function renderBattle(node: MapNode): HTMLElement {
       manaBar.appendChild(manaFill);
       bars.appendChild(manaBar);
     }
-    u.appendChild(bars);
+    const statuses = el("div", "unit-statuses");
+    u.append(bars, statuses);
     wrap.appendChild(u);
-    unitEls.set(cu.uid, { root: u, hp: hpFill, shield: shieldFill, mana: manaFill });
+    unitEls.set(cu.uid, { root: u, hp: hpFill, shield: shieldFill, mana: manaFill, hpText, statuses });
   }
 
   let speed = ctx.battleSpeed;
@@ -1536,8 +1708,22 @@ export function renderBattle(node: MapNode): HTMLElement {
     e.hp.style.width = `${hpPct}%`;
     e.shield.style.left = `${hpPct}%`;
     e.shield.style.width = `${shPct}%`;
+    e.hpText.textContent = cu.shield > 0 ? `${Math.ceil(cu.hp)} +${Math.ceil(cu.shield)}` : `${Math.ceil(cu.hp)}`;
     if (e.mana) e.mana.style.width = `${Math.min(100, (cu.mana / cu.maxMana) * 100)}%`;
     e.root.classList.toggle("stunned", cu.alive && cu.stunTicks > 0);
+    const statusList: Array<[boolean, string, string]> = [
+      [cu.stunTicks > 0, "💫", "スタン"],
+      [cu.silenceTicks > 0, "🔇", "沈黙"],
+      [cu.poisonTicks > 0 || cu.parasitePct > 0, "☠️", "毒・寄生"],
+      [cu.fearTicks > 0, "😱", "恐怖"],
+      [cu.ghostTicks > 0, "👻", "霊体"],
+    ];
+    e.statuses.innerHTML = "";
+    for (const [, icon, label] of statusList.filter(([active]) => active).slice(0, 3)) {
+      const badge = el("span", "", icon);
+      badge.title = label;
+      e.statuses.appendChild(badge);
+    }
     if (!cu.alive && !e.root.classList.contains("dead")) {
       // 残っている演出クラスが死亡アニメーションを上書きしないよう除去
       e.root.classList.remove("lunge", "casting", "hit-flash");
@@ -1563,6 +1749,7 @@ export function renderBattle(node: MapNode): HTMLElement {
   }
 
   function shakeBoard() {
+    if (!gameSettings().screenShake || gameSettings().reducedEffects) return;
     replay(wrap, "shake");
   }
 
@@ -1736,6 +1923,7 @@ export function renderBattle(node: MapNode): HTMLElement {
   }
 
   function finish(res: "win" | "lose") {
+    ctx.lastBattleReport = battle.summary();
     battle.settleRunRewards(run, res === "win");
     if (res === "win" && battle.bonusGold > 0) run.gold += battle.bonusGold;
     if (res === "win") {
@@ -1779,11 +1967,11 @@ export function renderBattle(node: MapNode): HTMLElement {
 
 function goldReward(node: MapNode): number {
   const run = ctx.run!;
-  // 幕が進んでもインフレしすぎないよう控えめのカーブ
-  const base = node.type === "elite" ? 16 + node.floor : 8 + node.floor;
+  // 後半の所持金だけが膨らまないよう、通常戦は緩やか・エリートは明確な差をつける
+  const base = node.type === "elite" ? 13 + node.floor : 7 + Math.ceil(node.floor * 0.6);
   return (
     base +
-    (run.act - 1) * 3 +
+    (run.act - 1) * 2 +
     (run.relics.includes("goldenEgg") ? 4 : 0) +
     ascMods(run.asc).winGold +
     (ACT_RULE_BY_ID.get(run.actRule)?.e.winGold ?? 0)
@@ -1799,6 +1987,34 @@ export function renderResult(node: MapNode, win: boolean, hpLost: number): HTMLE
 function buildResult(node: MapNode, win: boolean, hpLost: number): HTMLElement {
   const run = ctx.run!;
   const s = el("div", "center-screen");
+  const battleReport = () => {
+    const wrap = el("details", "battle-report");
+    const allies = ctx.lastBattleReport.filter((row) => row.side === "ally").sort((a, b) => b.damageDealt - a.damageDealt);
+    const totalDamage = Math.max(1, allies.reduce((sum, row) => sum + row.damageDealt, 0));
+    wrap.appendChild(el("summary", "", "📊 戦闘レポートを見る"));
+    const table = el("div", "report-table");
+    const head = el("div", "report-head");
+    head.append(
+      el("span", "", "ユニット"),
+      el("span", "", "与ダメージ"),
+      el("span", "", "被ダメージ"),
+      el("span", "", "回復"),
+      el("span", "", "シールド"),
+      el("span", "", "スキル"),
+    );
+    table.appendChild(head);
+    for (const row of allies) {
+      const line = el("div", "report-row");
+      const identity = el("span", "report-unit", `${row.icon} ${row.name} ${"★".repeat(row.star)}`);
+      const damage = el("span", "report-damage", row.damageDealt.toLocaleString());
+      const meter = el("i", "report-meter"); meter.style.setProperty("--share", `${Math.max(2, row.damageDealt / totalDamage * 100)}%`);
+      damage.appendChild(meter);
+      line.append(identity, damage, el("span", "", row.damageTaken.toLocaleString()), el("span", "", row.healing.toLocaleString()), el("span", "", row.shielding.toLocaleString()), el("span", "", `${row.casts}回`));
+      table.appendChild(line);
+    }
+    wrap.appendChild(table);
+    return wrap;
+  };
 
   if (!win) {
     s.appendChild(el("h2", "", "💔 敗北…"));
@@ -1807,14 +2023,17 @@ function buildResult(node: MapNode, win: boolean, hpLost: number): HTMLElement {
       s.appendChild(
         el("div", "sub", "手負いの君の前に、戦場を漁る闇商人が現れた。\n体勢を立て直してから再挑戦しよう。"),
       );
+      s.appendChild(battleReport());
       s.appendChild(btn("🛒 闇商人のもとへ駆け込む", "primary", () => go({ kind: "shop", node, rescue: true })));
     } else {
+      s.appendChild(battleReport());
       s.appendChild(btn("マップへ戻る", "primary", () => go({ kind: "map" })));
     }
     return s;
   }
 
   s.appendChild(el("h2", "", "🎉 勝利！"));
+  s.appendChild(battleReport());
 
   // アイテムドロップ（エリートは確定、通常戦闘は30%+補正）
   const dropChance =
@@ -1850,8 +2069,8 @@ function buildResult(node: MapNode, win: boolean, hpLost: number): HTMLElement {
       row.appendChild(card);
     }
     s.appendChild(row);
-    s.appendChild(btn("スキップ (+5G)", "", () => {
-      run.gold += 5;
+    s.appendChild(btn("スキップ (+4G)", "", () => {
+      run.gold += 4;
       go({ kind: "map" });
     }));
     return s;
@@ -1876,8 +2095,8 @@ function buildResult(node: MapNode, win: boolean, hpLost: number): HTMLElement {
   }
   s.appendChild(row);
   s.appendChild(msg);
-  s.appendChild(btn("スキップ (+3G)", "", () => {
-    run.gold += 3;
+  s.appendChild(btn("スキップ (+2G)", "", () => {
+    run.gold += 2;
     go({ kind: "map" });
   }));
   return s;
@@ -1892,7 +2111,7 @@ function unitCard(def: UnitDef, action: string, onClick: () => void): HTMLElemen
     el("div", "name", `${def.name}`),
     el("div", "cost", `コスト ${def.cost}`),
     el("div", "traits", def.traits.map((t) => `${TRAITS[t].icon}${TRAITS[t].name}`).join(" ")),
-    el("div", "skill", `${def.skill.name}: ${def.skill.desc}`),
+    el("div", "skill", `${def.skill.name}【${skillScalingLabel(def.skill.scaling)}】: ${def.skill.desc}`),
     el("div", "", `HP ${def.hp} / 攻撃 ${def.atk}`),
   );
   c.title = action;
@@ -2060,6 +2279,7 @@ export function renderShop(node: MapNode, rescue = false): HTMLElement {
       const def = unitDef(ou);
       const onBoard = ou.pos !== null;
       const chip = el("div", `roster-chip ${onBoard ? "on-board" : "on-bench"}`);
+      chip.dataset.unitTooltip = def.id;
       chip.title = onBoard
         ? `盤面に配置中（${ou.pos!.x + 1}列・${ou.pos!.y + 1}行）`
         : "ベンチで待機中";
@@ -2451,6 +2671,24 @@ export function renderGameover(win: boolean, abandoned = false): HTMLElement {
     reward.innerHTML = `<b>🔹 記憶の欠片 +${earnedShards}</b><small>到達地点・戦闘勝利数・挑戦段位から算出（所持 ${m.memoryShards}）</small>`;
     s.appendChild(reward);
   }
-  s.appendChild(btn("タイトルへ戻る", "primary", () => go({ kind: "title" })));
+  const activeTraits = computeTraits(boardUnits(run), run.ancientRelics).filter((trait) => trait.tier > 0);
+  const summary = el("div", "run-summary");
+  summary.innerHTML = `<b>今回の編成</b><span>配置 ${boardUnits(run).length}体 ／ ★合計 ${boardUnits(run).reduce((sum, unit) => sum + unit.star, 0)}</span><span>発動シナジー ${activeTraits.length}種 ／ 古代レリック ${run.ancientRelics.length}個</span>`;
+  s.appendChild(summary);
+  const nextLegacy = LEGACY_UPGRADES
+    .filter((up) => !hasLegacy(up.id) && (!up.requires || hasLegacy(up.requires)))
+    .sort((a, b) => a.cost - b.cost)[0];
+  if (nextLegacy) {
+    s.appendChild(el("div", "post-run-goal", m.memoryShards >= nextLegacy.cost
+      ? `✨ ${nextLegacy.name}を記憶の祭壇で解放できます`
+      : `次の解放「${nextLegacy.name}」まで 🔹${nextLegacy.cost - m.memoryShards}`));
+  }
+  const actions = el("div", "toolbar gameover-actions");
+  actions.append(
+    btn("🔮 記憶の祭壇へ", nextLegacy && m.memoryShards >= nextLegacy.cost ? "primary" : "", () => showLegacySanctum()),
+    btn("同じ段位でもう一度", "primary", () => go({ kind: "starter" })),
+    btn("タイトルへ戻る", "", () => go({ kind: "title" })),
+  );
+  s.appendChild(actions);
   return s;
 }

@@ -76,6 +76,19 @@ export interface FloatText {
   cls: "dmg" | "crit" | "magic" | "heal" | "cast" | "poison";
 }
 
+export interface BattleUnitReport {
+  uid: number;
+  name: string;
+  icon: string;
+  side: "ally" | "enemy";
+  star: number;
+  damageDealt: number;
+  damageTaken: number;
+  healing: number;
+  shielding: number;
+  casts: number;
+}
+
 export type SkillFx = "fire" | "ice" | "holy" | "shadow" | "arrow" | "phys" | "bolt";
 
 /** 演出用イベント（1tick分、ビューが消費する） */
@@ -102,11 +115,16 @@ export function enemyMults(
 ): { hp: number; atk: number; as: number; armor: number } {
   const asc = ascMods(run.asc);
   const rule = ACT_RULE_BY_ID.get(run.actRule)?.e ?? {};
+  // 低段位はビルドを気軽に完成させられる導入帯。
+  // 段位5までに緩和が自然に消え、以降はアセンション本来の補正だけになる。
+  const lowAscHpEase = [0.88, 0.91, 0.94, 0.97, 0.99][run.asc] ?? 1;
+  const lowAscAtkEase = [0.9, 0.92, 0.94, 0.96, 0.98][run.asc] ?? 1;
   return {
     hp:
       (1 + (asc.enemyHpPct + (rule.enemyHpPct ?? 0)) / 100) *
-      (nodeType === "boss" ? 1 + asc.bossHpPct / 100 : 1),
-    atk: 1 + (asc.enemyAtkPct + (rule.enemyAtkPct ?? 0)) / 100,
+      (nodeType === "boss" ? 1 + asc.bossHpPct / 100 : 1) *
+      lowAscHpEase,
+    atk: (1 + (asc.enemyAtkPct + (rule.enemyAtkPct ?? 0)) / 100) * lowAscAtkEase,
     as: 1 + (asc.enemyAsPct + (rule.enemyAsPct ?? 0)) / 100,
     armor: asc.enemyArmor,
   };
@@ -219,13 +237,13 @@ export function buildAllyUnit(
       // 装備アイテム
       switch (u.item) {
         case "sword": cu.atk = Math.round(cu.atk * 1.3); break;
-        case "shield": cu.armor += 30; break;
+        case "shield": cu.armor += 35; break;
         case "staff": cu.spellPower += 40; break;
         case "bow": cu.atkSpeed *= 1.25; break;
-        case "orb": cu.maxHp += 300; cu.hp += 300; break;
-        case "blade": cu.lifesteal += 0.2; break;
+        case "orb": cu.maxHp += 350; cu.hp += 350; break;
+        case "blade": cu.lifesteal += 0.25; break;
         case "crystal": cu.mana += 50; break;
-        case "claw": cu.critChance += 0.3; break;
+        case "claw": cu.critChance += 0.35; break;
         // 合成アイテム
         case "sword2": cu.atk = Math.round(cu.atk * 1.7); break;
         case "shield2": cu.armor += 70; cu.maxHp += 300; cu.hp += 300; cu.shield += Math.round(cu.maxHp * 0.3); break;
@@ -292,9 +310,9 @@ export function buildAllyUnit(
         }
       }
       if (hasAncient("legionPact")) {
-        scaleHp(0.5);
-        cu.atk = Math.max(1, Math.round(cu.atk * 0.5));
-        cu.armor = Math.max(0, Math.round(cu.armor * 0.5));
+        scaleHp(0.6);
+        cu.atk = Math.max(1, Math.round(cu.atk * 0.6));
+        cu.armor = Math.max(0, Math.round(cu.armor * 0.75));
       }
       if (hasAncient("aegisCore") && def.traits.includes("guardian")) cu.shieldAtkBonus = 0.5;
       if (hasAncient("manaCycle") && def.traits.includes("mage")) cu.manaRefundPct = 0.35;
@@ -303,8 +321,9 @@ export function buildAllyUnit(
         cu.atkSpeed *= 1.35;
       }
       if (hasAncient("bloodGrail") && def.traits.includes("berserker")) {
-        scaleHp(1.15);
-        cu.lifesteal += 0.25;
+        scaleHp(1.25);
+        cu.atkSpeed *= 1.2;
+        cu.lifesteal += 0.3;
       }
       if (hasAncient("ninefoldHarmony")) {
         const activeTiers = Math.min(6, traits.reduce((sum, t) => sum + t.tier, 0));
@@ -384,6 +403,27 @@ export class Battle {
   private lighthouseTriggered = new Set<number>();
   private allyCastCount = 0;
   bonusGold = 0;
+  private reports = new Map<number, BattleUnitReport>();
+
+  private report(u: CombatUnit): BattleUnitReport {
+    let row = this.reports.get(u.uid);
+    if (!row) {
+      row = { uid: u.uid, name: u.name, icon: u.icon, side: u.side, star: u.star, damageDealt: 0, damageTaken: 0, healing: 0, shielding: 0, casts: 0 };
+      this.reports.set(u.uid, row);
+    }
+    return row;
+  }
+
+  summary(): BattleUnitReport[] {
+    for (const u of this.units) this.report(u);
+    return [...this.reports.values()].map((row) => ({ ...row }));
+  }
+
+  private recordShield(source: CombatUnit, target: CombatUnit, amount: number): void {
+    const value = Math.max(0, Math.round(amount));
+    target.shield += value;
+    this.report(source).shielding += value;
+  }
 
   constructor(run: RunState, team: EnemyTeam, nodeType: "battle" | "elite" | "boss" = "battle") {
     this.runRef = run;
@@ -420,7 +460,8 @@ export class Battle {
     const gTier = tierOf("guardian");
     if (gTier > 0) {
       const pct = [0, 0.12, 0.25, 0.45][gTier];
-      for (const cu of this.units) cu.shield += Math.round(cu.maxHp * pct);
+      const source = this.units.find((unit) => unit.traits.includes("guardian")) ?? this.units[0];
+      for (const cu of this.units) this.recordShield(source, cu, cu.maxHp * pct);
     }
     // 僧侶: 味方全体リジェネ（毎秒、最大HP比）
     this.allyRegen = [0, 0.01, 0.02, 0.035][tierOf("priest")];
@@ -491,7 +532,12 @@ export class Battle {
       const allies = alliesNow().filter((u) => u.skill);
       const low = [...allies].sort((a, b) => (UNIT_BY_ID.get(board.find((x) => x.iid === a.ownerIid)?.defId ?? "")?.cost ?? 9) - (UNIT_BY_ID.get(board.find((x) => x.iid === b.ownerIid)?.defId ?? "")?.cost ?? 9))[0];
       const high = [...allies].sort((a, b) => (UNIT_BY_ID.get(board.find((x) => x.iid === b.ownerIid)?.defId ?? "")?.cost ?? 0) - (UNIT_BY_ID.get(board.find((x) => x.iid === a.ownerIid)?.defId ?? "")?.cost ?? 0))[0];
-      if (low && high && low.uid !== high.uid && high.skill) { low.skill = { ...high.skill }; low.maxMana = high.skill.mana; low.skillPowerMult *= 0.7; }
+      if (low && high && low.uid !== high.uid && high.skill) {
+        low.skill = { ...high.skill };
+        low.maxMana = high.skill.mana;
+        low.skillPowerMult *= 0.9;
+        low.mana = Math.min(low.maxMana - 1, low.mana + 30);
+      }
     }
 
     // ドッペルゲンガー: 敵最高攻撃力の通常スキルをコピー
@@ -520,12 +566,17 @@ export class Battle {
       if (Math.random() < 0.5) for (const u of this.units.filter((x) => x.side === "ally")) u.critChance += [0, 0.25, 0.4, 0.55][gamblerTier];
       else this.allySilenceTicks = [0, 20, 15, 10][gamblerTier];
     }
-    // 道化師: ボス戦以外で、段階数まで敵と位置交換
+    // 道化師: 通常戦は位置交換、ボス戦は同じ段階数の分身で攻撃を無効化
     const jesterTier = tierOf("jester");
-    if (jesterTier > 0 && nodeType !== "boss") {
-      const jesters = this.units.filter((u) => u.side === "ally" && u.traits.includes("jester")).slice(0, jesterTier);
-      const enemies = this.units.filter((u) => u.side === "enemy").sort(() => Math.random() - 0.5);
-      jesters.forEach((j, i) => { const e = enemies[i]; if (e) [j.x, e.x, j.y, e.y] = [e.x, j.x, e.y, j.y]; });
+    if (jesterTier > 0) {
+      const allJesters = this.units.filter((u) => u.side === "ally" && u.traits.includes("jester"));
+      if (nodeType === "boss") {
+        for (const jester of allJesters) jester.decoyCharges += jesterTier;
+      } else {
+        const jesters = allJesters.slice(0, jesterTier);
+        const enemies = this.units.filter((u) => u.side === "enemy").sort(() => Math.random() - 0.5);
+        jesters.forEach((j, i) => { const e = enemies[i]; if (e) [j.x, e.x, j.y, e.y] = [e.x, j.x, e.y, j.y]; });
+      }
     }
     // 前戦で作ったポーションを自動使用
     for (const potion of run.potions.splice(0)) {
@@ -588,7 +639,9 @@ export class Battle {
       for (const u of this.units.filter((x) => x.alive && x.side === "ally")) {
         const snap = this.openingSnapshot.get(u.uid);
         if (!snap) continue;
-        u.hp = Math.min(u.maxHp, snap.hp); u.mana = snap.mana; u.x = snap.x; u.y = snap.y;
+        u.hp = Math.min(u.maxHp, Math.max(u.hp, snap.hp));
+        u.mana = Math.min(u.maxMana - 1, Math.max(u.mana, snap.mana));
+        u.x = snap.x; u.y = snap.y;
         this.events.push({ type: "buff", uid: u.uid, fx: "heal" });
       }
     }
@@ -619,14 +672,16 @@ export class Battle {
       if (!u.alive) continue;
       if (u.side === "ally" && this.runRef.ancientRelics.includes("lifeBeacon") && u.hp < u.maxHp * 0.3 && !this.lighthouseTriggered.has(u.uid)) {
         this.lighthouseTriggered.add(u.uid);
-        u.shield += Math.round(u.maxHp * 0.2);
+        this.recordShield(u, u, u.maxHp * 0.35);
+        u.mana = Math.min(u.maxMana - 1, u.mana + 20);
+        u.stunTicks = 0; u.slowTicks = 0; u.silenceTicks = 0; u.fearTicks = 0;
         u.y = 7; u.x = Math.max(0, Math.min(6, u.x));
         this.floats.push({ x: u.x, y: u.y, text: "灯台", cls: "heal" });
       }
       // 亡霊: 固定時間だけ無敵。毎秒HPを失い、時間切れで消滅
       if (u.ghostTicks > 0) {
         u.ghostTicks--;
-        if (u.ghostTicks % 10 === 0) u.hp -= Math.max(1, Math.round(u.maxHp * 0.12));
+        if (u.ghostTicks % 10 === 0) u.hp -= Math.max(1, Math.round(u.maxHp * 0.04));
         if (u.ghostTicks <= 0 || u.hp <= 0) { u.hp = 0; this.finishDeath(u, null); continue; }
       }
       // 寄生: 毎秒の最大HP割合ダメージ（ボス級にも1回最大250まで）
@@ -815,7 +870,7 @@ export class Battle {
 
   private cast(u: CombatUnit, target: CombatUnit, powerScale = 1, isEcho = false, overrideSkill?: SkillDef) {
     const sk = overrideSkill ?? u.skill!;
-    if (!isEcho) u.mana = 0;
+    if (!isEcho) { u.mana = 0; this.report(u).casts++; }
     u.atkCd = Math.max(u.atkCd, 3);
     let base =
       sk.scaling === "attack"
@@ -938,7 +993,7 @@ export class Battle {
         break;
       }
       case "shield":
-        u.shield += Math.round(base);
+        this.recordShield(u, u, base);
         this.floats.push({ x: u.x, y: u.y, text: `🛡+${Math.round(base)}`, cls: "heal" });
         this.events.push({ type: "buff", uid: u.uid, fx: "shield" });
         break;
@@ -1074,7 +1129,7 @@ export class Battle {
       case "rally": {
         const amount = Math.round(base);
         for (const a of allies()) {
-          a.shield += amount;
+          this.recordShield(u, a, amount);
           this.events.push({ type: "buff", uid: a.uid, fx: "shield" });
         }
         this.floats.push({ x: u.x, y: u.y, text: `🛡全体+${amount}`, cls: "cast" });
@@ -1082,6 +1137,7 @@ export class Battle {
       }
       case "frenzy": {
         // 自己強化（この戦闘中ずっと持続）
+        this.recordShield(u, u, base);
         u.atkSpeed *= 1.6;
         u.critChance = Math.min(1, u.critChance + 0.4);
         this.events.push({ type: "buff", uid: u.uid, fx: "heal" });
@@ -1142,7 +1198,7 @@ export class Battle {
         break;
       }
       case "mirrorStrike": {
-        if (target.skill && target.skill.type !== "mirrorStrike" && target.skill.type !== "allyCopy") this.cast(u, target, 0.65 * powerScale, true, target.skill);
+        if (target.skill && target.skill.type !== "mirrorStrike" && target.skill.type !== "allyCopy" && !["生ける贋作", "同胞完全擬態", "双貌の大勝負"].includes(target.skill.name)) this.cast(u, target, 0.65 * powerScale, true, target.skill);
         else this.dealDamage(u, target, base, kind, false);
         break;
       }
@@ -1175,14 +1231,14 @@ export class Battle {
         for (let i = 1; i <= 6; i++) {
           const x = u.x + dx * i, y = u.y + dy * i;
           if (x < 0 || x >= 7 || y < 0 || y >= 8) break;
-          for (const a of allies()) if (a.x === x && a.y === y) a.shield += Math.round(base * 0.45);
+          for (const a of allies()) if (a.x === x && a.y === y) this.recordShield(u, a, base * 0.45);
           for (const t of foes()) if (t.x === x && t.y === y) this.dealDamage(u, t, base, kind, false);
         }
         if (!isEcho) { u.x = Math.max(0, Math.min(6, target.x - dx)); u.y = Math.max(0, Math.min(7, target.y - dy)); }
         break;
       }
       case "allyCopy": {
-        const copy = allies().filter((a) => a.uid !== u.uid && a.skill && a.skill.type !== "allyCopy" && a.skill.type !== "mirrorStrike").sort((a, b) => cheb(a, u) - cheb(b, u))[0];
+        const copy = allies().filter((a) => a.uid !== u.uid && a.skill && a.skill.type !== "allyCopy" && a.skill.type !== "mirrorStrike" && !["生ける贋作", "同胞完全擬態", "双貌の大勝負"].includes(a.skill.name)).sort((a, b) => cheb(a, u) - cheb(b, u))[0];
         if (copy?.skill) this.cast(u, target, 0.8 * powerScale, true, copy.skill);
         break;
       }
@@ -1262,8 +1318,8 @@ export class Battle {
     if (!isEcho) {
       if (u.itemId === "staff2" && u.itemCastCount <= 5) u.spellPower += 20;
       if (u.itemId === "sword_crystal" && u.itemCastCount <= 3) u.atk = Math.round(u.atk * 1.2);
-      if (u.itemId === "shield_staff") u.shield += Math.round(90 * (1 + u.spellPower / 100));
-      if (u.itemId === "shield_crystal" && firstItemCast) for (const a of allies()) a.shield += Math.round(100 + u.armor * 2);
+      if (u.itemId === "shield_staff") this.recordShield(u, u, 90 * (1 + u.spellPower / 100));
+      if (u.itemId === "shield_crystal" && firstItemCast) for (const a of allies()) this.recordShield(u, a, 100 + u.armor * 2);
       if (u.itemId === "orb_crystal" && firstItemCast) this.itemHeal(u, u.maxHp * 0.25);
       if (u.itemId === "blade_crystal") this.itemHeal(u, u.maxHp * 0.08);
       if (u.itemId === "staff_crystal") u.mana = Math.min(u.maxMana - 1, u.mana + Math.round(u.maxMana * 0.2));
@@ -1316,6 +1372,7 @@ export class Battle {
       const boosted = u.itemId === "staff_orb" ? amount * 1.3 : amount;
       const actual = Math.max(0, Math.min(a.maxHp - a.hp, Math.round(boosted)));
       a.hp += actual;
+      this.report(u).healing += actual;
       if (actual > 0) { this.floats.push({ x: a.x, y: a.y, text: `+${actual}`, cls: "heal" }); this.events.push({ type: "buff", uid: a.uid, fx: "heal" }); }
     };
     const farthest = () => [...foes()].sort((a, b) => dist(b, u) - dist(a, u))[0] ?? target;
@@ -1329,35 +1386,35 @@ export class Battle {
       // ----- コスト3 -----
       case "星落とし": { const c = densest(); burst(c, 1); hit(c, base * 0.55, "magic"); for (const t of foes()) if (dist(t, c) === 1) { t.x += Math.sign(t.x - c.x); t.y += Math.sign(t.y - c.y); } break; }
       case "竜槍滑空": { const t = farthest(); lineHit(t, base * 0.75); u.x = Math.max(0, Math.min(6, t.x - Math.sign(t.x - u.x))); u.y = Math.max(0, Math.min(7, t.y - Math.sign(t.y - u.y))); for (const e of foes()) if (dist(e, t) <= 1) e.armor = Math.max(0, e.armor - 18); break; }
-      case "冥府の契約": { const dead = this.deathHistory.filter((d) => d.side === u.side).length; u.shield += Math.round(base * 0.8); burst(u, 1, base * (0.65 + Math.min(0.75, dead * 0.15)), "physical"); break; }
+      case "冥府の契約": { const dead = this.deathHistory.filter((d) => d.side === u.side).length; this.recordShield(u, u, base * 0.8); burst(u, 1, base * (0.65 + Math.min(0.75, dead * 0.15)), "physical"); break; }
       case "六道斬": { let strikes = 4; while (strikes-- > 0) { const t = [...foes()].sort((a, b) => a.hp - b.hp)[0]; if (!t) break; const wasAlive = t.alive; hit(t, base * 0.38, "physical"); if (wasAlive && !t.alive) strikes += 2; } break; }
       case "雷門": { const pair = [...foes()].sort((a, b) => b.mana - a.mana).slice(0, 2); for (let i = 0; i < 3; i++) for (const t of pair) if (t.alive) { hit(t, base * 0.42, "magic"); t.slowTicks = Math.max(t.slowTicks, 18); } break; }
-      case "聖域展開": for (const a of allies()) if (dist(a, u) <= 2) { a.shield += Math.round(base * 0.7); heal(a, base * 0.25); } break;
+      case "聖域展開": for (const a of allies()) if (dist(a, u) <= 2) { this.recordShield(u, a, base * 0.7); heal(a, base * 0.25); } break;
       case "火山核": { hit(target, base * 0.55, "magic"); target.poisonTicks = 40; target.poisonPerHit = Math.max(target.poisonPerHit, Math.round(base * 0.22)); burst(target, 1, base * 0.65, "magic"); break; }
       case "風雷環": { const near = [...foes()].sort((a, b) => dist(a, u) - dist(b, u)).slice(0, 5); near.forEach((t, i) => { this.events.push({ type: "skillshot", fromUid: u.uid, toX: t.x, toY: t.y, fx: "bolt" }); hit(t, base * (0.34 + i * 0.04), "magic"); }); break; }
       case "影縫い": { const t = farthest(); lineHit(t); for (const e of foes()) if (dist(e, t) <= 1) e.stunTicks = Math.max(e.stunTicks, Math.round(12 * powerScale)); break; }
       case "猛進再突撃": { const c = densest(); lineHit(c, base * 0.55); burst(c, 1, base * 0.65, "physical"); lineHit(c, base * 0.4); break; }
-      case "未来の選定": { const a = [...allies()].sort((x, y) => x.hp / x.maxHp - y.hp / y.maxHp)[0]; if (a) { a.shield += Math.round(base * 0.8); heal(a, base * 0.55); } break; }
-      case "灰より還る": { burst(target, 1, base, "magic"); u.shield += Math.round(base * 0.45); u.ghostRevived = false; break; }
+      case "未来の選定": { const a = [...allies()].sort((x, y) => x.hp / x.maxHp - y.hp / y.maxHp)[0]; if (a) { this.recordShield(u, a, base * 0.8); heal(a, base * 0.55); } break; }
+      case "灰より還る": { burst(target, 1, base, "magic"); this.recordShield(u, u, base * 0.45); u.ghostRevived = false; break; }
       case "断層隆起": { lineHit(target, base * 0.9); for (const t of foes()) if (dist(t, target) <= 1) { t.x = Math.max(0, Math.min(6, t.x + Math.sign(t.x - u.x))); t.stunTicks = Math.max(t.stunTicks, 8); } break; }
-      case "狐火輪舞": { const wounded = [...allies()].sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0]; for (let i = 0; i < 3; i++) { const t = foes()[i % Math.max(1, foes().length)]; if (t) hit(t, base * 0.24, "magic"); } if (wounded) { wounded.shield += Math.round(base * 0.4); heal(wounded, base * 0.3); } u.decoyCharges = Math.min(3, u.decoyCharges + 1); break; }
-      case "貪欲な偽装": { const dealt = hit(target, base, "physical"); heal(u, dealt * 0.8); u.shield += Math.round(Math.min(base, u.maxHp * 0.25)); target.targetUid = u.uid; break; }
+      case "狐火輪舞": { const wounded = [...allies()].sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0]; for (let i = 0; i < 3; i++) { const t = foes()[i % Math.max(1, foes().length)]; if (t) hit(t, base * 0.24, "magic"); } if (wounded) { this.recordShield(u, wounded, base * 0.4); heal(wounded, base * 0.3); } u.decoyCharges = Math.min(3, u.decoyCharges + 1); break; }
+      case "貪欲な偽装": { const dealt = hit(target, base, "physical"); heal(u, dealt * 0.8); this.recordShield(u, u, Math.min(base, u.maxHp * 0.25)); target.targetUid = u.uid; break; }
       case "反響する静寂": { const t = farthest(); burst(t, 1, base, "magic"); for (const e of foes()) if (dist(e, t) <= 1) e.silenceTicks = Math.max(e.silenceTicks, 24); hit(t, base * 0.45, "magic"); break; }
-      case "生ける贋作": { if (target.skill && target.skill.type !== "signature") this.cast(u, target, 0.7 * powerScale, true, target.skill); hit(target, base * 0.5, "magic"); target.atk = Math.max(1, Math.round(target.atk * 0.9)); break; }
+      case "生ける贋作": { if (target.skill && !["mirrorStrike", "allyCopy"].includes(target.skill.type) && !["生ける贋作", "同胞完全擬態", "双貌の大勝負"].includes(target.skill.name)) this.cast(u, target, 0.7 * powerScale, true, target.skill); hit(target, base * 0.5, "magic"); target.atk = Math.max(1, Math.round(target.atk * 0.9)); break; }
       case "重圧圧縮命令": { const c = densest(); for (const t of foes()) if (dist(t, c) <= 2) { t.x += Math.sign(c.x - t.x); t.y += Math.sign(c.y - t.y); t.slowTicks = Math.max(t.slowTicks, 35); t.atkCd += 10; } burst(c, 1, base, "magic"); break; }
-      case "双星霊薬": { const pair = [...allies()].sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp).slice(0, 2); for (const a of pair) { heal(a, base); a.shield += Math.round(base * 0.35); } break; }
+      case "双星霊薬": { const pair = [...allies()].sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp).slice(0, 2); for (const a of pair) { heal(a, base); this.recordShield(u, a, base * 0.35); } break; }
       case "運命の六面体": { const roll = 1 + Math.floor(Math.random() * 6); this.floats.push({ x: u.x, y: u.y, text: `🎲${roll}`, cls: "cast" }); if (roll === 1) u.hp = Math.max(1, u.hp - Math.round(u.maxHp * 0.2)); if (roll === 2) target.slowTicks = 35; if (roll === 3) { target.poisonTicks = 40; target.poisonPerHit = Math.round(base / 4); } if (roll === 4) burst(target, 1, base, "magic"); if (roll === 5) target.stunTicks = this.bossFight ? 8 : 25; if (roll === 6) hit(target, this.bossFight ? Math.min(base * 2, target.maxHp * 0.18) : base * 3, "magic"); break; }
-      case "同胞完全擬態": { const copy = allies().filter((a) => a.uid !== u.uid && a.skill && a.skill.type !== "signature").sort((a, b) => dist(a, u) - dist(b, u))[0]; if (copy?.skill) this.cast(u, target, 0.9 * powerScale, true, copy.skill); u.atk = Math.round(u.atk * 1.15); u.armor += 10; break; }
-      case "星なき夜": for (const t of foes()) { t.targetUid = null; t.silenceTicks = Math.max(t.silenceTicks, 18); t.slowTicks = Math.max(t.slowTicks, 30); if (t.range > 1) t.range = Math.max(1, t.range - 2); } break;
+      case "同胞完全擬態": { const copy = allies().filter((a) => a.uid !== u.uid && a.skill && !["mirrorStrike", "allyCopy"].includes(a.skill.type) && !["生ける贋作", "同胞完全擬態", "双貌の大勝負"].includes(a.skill.name)).sort((a, b) => dist(a, u) - dist(b, u))[0]; if (copy?.skill) this.cast(u, target, 0.9 * powerScale, true, copy.skill); u.atk = Math.round(u.atk * 1.15); u.armor += 10; break; }
+      case "星なき夜": for (const t of foes()) { hit(t, base * 0.3, "magic"); t.targetUid = null; t.silenceTicks = Math.max(t.silenceTicks, 18); t.slowTicks = Math.max(t.slowTicks, 30); if (t.range > 1) t.range = Math.max(1, t.range - 2); } break;
       case "飛散腐食液": { const c = target; burst(c, 1, base * 0.55, "magic"); for (const t of foes()) if (dist(t, c) <= 1) { t.atk = Math.round(t.atk * 0.78); t.armor = Math.max(0, Math.round(t.armor * 0.6)); t.atkSpeed *= 0.8; this.recordScrap(t, "armor"); } break; }
       case "戦肉捕食": { const corpse = this.deathHistory.find((d) => d.side !== u.side && !this.consumedCorpses.has(d.uid)); if (corpse) { this.consumedCorpses.add(corpse.uid); const add = 60; u.maxHp += add; u.hp += add; u.atk += Math.max(4, Math.round(corpse.atk * 0.12)); const owned = this.runRef.roster.find((x) => x.iid === u.ownerIid); if (owned) owned.hpBonus = (owned.hpBonus ?? 0) + add; } else hit(target, base, "physical"); break; }
-      case "戦利品散布": { const roll = Math.floor(Math.random() * 4); if (roll === 0) this.bonusGold = Math.min(3, this.bonusGold + 1); for (const a of allies()) { if (roll === 1) heal(a, base * 0.55); if (roll === 2) a.mana = Math.min(a.maxMana - 1, a.mana + 18); if (roll === 3) a.shield += Math.round(base * 0.5); } break; }
+      case "戦利品散布": { const roll = Math.floor(Math.random() * 4); if (roll === 0) this.bonusGold = Math.min(3, this.bonusGold + 1); for (const a of allies()) { if (roll === 1) heal(a, base * 0.55); if (roll === 2) a.mana = Math.min(a.maxMana - 1, a.mana + 18); if (roll === 3) this.recordShield(u, a, base * 0.5); } break; }
       case "三響の星鐘": { burst(target, 1, base * 0.5, "magic"); for (const a of allies()) heal(a, base * 0.25); for (const t of foes()) t.silenceTicks = Math.max(t.silenceTicks, 10); break; }
       case "必中未来落星": { const picks = [...foes()].sort((a, b) => b.atk - a.atk).slice(0, 3); for (const t of picks) { hit(t, base * 0.62, "magic"); t.mana = Math.max(0, t.mana - 20); } u.mana = Math.min(u.maxMana - 1, u.mana + picks.length * 8); break; }
       case "奈落重力胞子": { target.poisonTicks = 50; target.poisonPerHit = Math.round(base / 5); for (const t of foes()) if (dist(t, target) <= 2) { t.x += Math.sign(target.x - t.x); t.y += Math.sign(target.y - t.y); t.slowTicks = Math.max(t.slowTicks, 25); } break; }
 
       // ----- コスト4 -----
-      case "決戦命令": for (const a of allies()) { a.atk = Math.round(a.atk * 1.32); a.atkSpeed *= 1.18; a.mana = Math.min(a.maxMana - 1, a.mana + 12); } break;
+      case "決戦命令": for (const a of allies()) { a.atk = Math.round(a.atk * 1.32); a.atkSpeed *= 1.18; a.mana = Math.min(a.maxMana - 1, a.mana + 12); a.shield += Math.round(base * 0.35); } break;
       case "救済の翼": { const saved = [...allies()].sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp).slice(0, 3); for (const a of saved) { a.decoyCharges = Math.min(5, a.decoyCharges + 2); heal(a, base); burst(a, 1, base * 0.35, "magic"); } break; }
       case "超電導嵐": for (const t of foes()) { hit(t, base * 0.58, "magic"); if (t.alive) { t.slowTicks = Math.max(t.slowTicks, 20); const near = foes().find((x) => x.uid !== t.uid && dist(x, t) <= 1); if (near) hit(near, base * 0.28, "magic"); } } break;
       case "魂の徴収": { const t = [...foes()].sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0] ?? target; const before = t.alive; hit(t, t.hp / t.maxHp <= 0.3 && !this.bossFight ? t.hp + t.shield : base, "physical"); if (before && !t.alive) { u.mana = Math.min(u.maxMana - 1, u.mana + Math.round(u.maxMana * 0.65)); u.atk = Math.round(u.atk * 1.12); } break; }
@@ -1365,26 +1422,26 @@ export class Battle {
       case "照準砲列": { const row = target.y; for (let x = 0; x < 7; x++) { this.events.push({ type: "aoe", x, y: row, kind: "fire" }); for (const t of foes()) if (t.x === x && Math.abs(t.y - row) <= 1) hit(t, base * 0.45, "magic"); } break; }
       case "英霊降下": { const dead = this.deathHistory.filter((d) => d.side === u.side).slice(-3); for (const d of dead) { for (const t of foes()) if (dist(t, d) <= 1) hit(t, base * 0.45, "physical"); for (const a of allies()) if (dist(a, d) <= 1) heal(a, base * 0.35); } if (!dead.length) for (const a of allies()) a.atk = Math.round(a.atk * 1.22); break; }
       case "幽界疾駆・共鳴": { const t = farthest(); const passed = allies().filter((a) => a.uid !== u.uid && Math.abs((a.x-u.x)*(t.y-u.y)-(a.y-u.y)*(t.x-u.x)) <= 1); for (const a of passed) a.shield += Math.round(base * 0.45); lineHit(t, base * (0.7 + passed.length * 0.15)); break; }
-      case "血盟の不落旗": this.bannerUid = u.uid; this.bannerTicks = 50; u.shield += Math.round(u.maxHp * 0.25); for (const a of allies()) if (a.traits.includes("bloodpact")) a.atk = Math.round(a.atk * 1.15); break;
+      case "血盟の不落旗": this.bannerUid = u.uid; this.bannerTicks = 50; u.shield += Math.round(u.maxHp * 0.2 + base * 0.6); for (const a of allies()) if (a.traits.includes("bloodpact")) a.atk = Math.round(a.atk * 1.15); break;
       case "紅月断": { u.hp = Math.max(1, u.hp - Math.round(u.maxHp * 0.18)); const pact = allies().filter((a) => a.traits.includes("bloodpact")).length; lineHit(target, base * (1 + pact * 0.12)); break; }
-      case "三秒前の残響": { const dead = [...this.deathHistory].reverse().find((d) => d.side === u.side && !d.alive); if (dead) { dead.alive = true; dead.hp = Math.round(dead.maxHp * 0.45); dead.mana = Math.round(dead.maxMana * 0.35); dead.ghostTicks = 0; dead.decoyCharges = Math.max(dead.decoyCharges, 1); this.events.push({ type: "buff", uid: dead.uid, fx: "heal" }); } else { const a = [...allies()].sort((x, y) => x.hp / x.maxHp - y.hp / y.maxHp)[0]; if (a) { heal(a, a.maxHp * 0.45); a.mana = Math.min(a.maxMana - 1, a.mana + 30); } } break; }
+      case "三秒前の残響": { const dead = [...this.deathHistory].reverse().find((d) => d.side === u.side && !d.alive); if (dead) { dead.alive = true; dead.hp = Math.min(dead.maxHp, Math.max(Math.round(dead.maxHp * 0.45), Math.round(base))); dead.mana = Math.round(dead.maxMana * 0.35); dead.ghostTicks = 0; dead.decoyCharges = Math.max(dead.decoyCharges, 1); this.events.push({ type: "buff", uid: dead.uid, fx: "heal" }); } else { const a = [...allies()].sort((x, y) => x.hp / x.maxHp - y.hp / y.maxHp)[0]; if (a) { heal(a, a.maxHp * 0.3 + base * 0.5); a.mana = Math.min(a.maxMana - 1, a.mana + 30); } } break; }
       case "装甲強奪突撃": { const c = densest(); let stolen = 0; for (const t of foes()) if (dist(t, c) <= 1) { const take = Math.min(30, Math.round(t.armor * 0.4)); t.armor -= take; stolen += take; this.recordScrap(t, "armor"); } u.armor += Math.min(100, stolen); burst(c, 1, base + stolen * 4, "physical"); for (const a of allies()) a.armor += Math.round(stolen / Math.max(1, allies().length)); break; }
       case "魔力の再編曲": { const team = allies(), before = new Map(team.map((a) => [a.uid, a.mana])); const each = team.reduce((s, a) => s + a.mana, 0) / Math.max(1, team.length); for (const a of team) { const old = before.get(a.uid) ?? 0; a.mana = Math.min(a.maxMana * 0.9, each); if (a.mana > old) a.atkSpeed *= 1.12; else a.shield += Math.round(base + 100); } break; }
       case "三つの災い顔": u.decoyCharges = Math.min(6, u.decoyCharges + 3); burst(target, 1, base * 0.45, "magic"); target.fearTicks = Math.max(target.fearTicks, 12); break;
-      case "追奏短剣・狂詩曲": u.daggerTicks = 100; u.atkSpeed *= 1.1; break;
+      case "追奏短剣・狂詩曲": hit(target, base * 0.6, "physical"); u.daggerTicks = 100; u.atkSpeed *= 1.1; break;
       case "因果固定の錨": { const c = densest(); burst(c, 1, base * 0.7, "magic"); for (const t of foes()) if (dist(t, c) <= 1) { t.stunTicks = Math.max(t.stunTicks, this.bossFight ? 10 : 28); t.mana = Math.max(0, t.mana - 25); } break; }
       case "巡る血月障壁": { const weak = [...allies()].sort((a,b) => a.hp/a.maxHp-b.hp/b.maxHp).slice(0,3); for (const a of weak) a.shield += Math.round(base + u.maxHp * 0.08); if (weak.some((a) => a.shield > a.maxHp * 0.35)) burst(densest(), 1, base * 0.6, "magic"); break; }
       case "星血均衡": { const team = allies(); const avg = team.reduce((s,a)=>s+a.hp/a.maxHp,0)/Math.max(1,team.length); for (const a of team) { const desired = a.maxHp * avg; a.hp = Math.max(1, Math.min(a.maxHp, Math.round((a.hp + desired) / 2))); heal(a, base * 0.55); } break; }
       case "魂の万能薬": { const team = allies(); const critical = team.some((a)=>a.hp/a.maxHp<0.35); if (critical) for (const a of team) heal(a, base); else if (foes().filter((t)=>dist(t,target)<=1).length>=2) { burst(target,1,base,"magic"); for(const t of foes()) if(dist(t,target)<=1){t.poisonTicks=30;t.poisonPerHit=Math.round(base*0.18);} } else for(const a of team){a.atkSpeed*=1.18;a.mana=Math.min(a.maxMana-1,a.mana+18);} break; }
-      case "双貌の大勝負": { const copy = allies().filter((a)=>a.uid!==u.uid&&a.skill&&a.skill.type!=="signature")[0]; if (Math.random()<0.55 && copy?.skill) this.cast(u,target,0.9*powerScale,true,copy.skill); else if(target.skill&&target.skill.type!=="signature") this.cast(u,target,0.75*powerScale,true,target.skill); else hit(target,base,"magic"); break; }
-      case "総攻城命令": { const mark=[...foes()].sort((a,b)=>(b.shield+b.armor*8)-(a.shield+a.armor*8))[0]??target; mark.armor=Math.max(0,Math.round(mark.armor*0.5)); for(const a of allies()){a.atk=Math.round(a.atk*1.18);a.targetUid=mark.uid;} this.floats.push({x:mark.x,y:mark.y,text:"🎯攻略目標",cls:"cast"}); break; }
+      case "双貌の大勝負": { const copy = allies().filter((a)=>a.uid!==u.uid&&a.skill&&!["mirrorStrike","allyCopy"].includes(a.skill.type)&&!["生ける贋作","同胞完全擬態","双貌の大勝負"].includes(a.skill.name))[0]; if (Math.random()<0.55 && copy?.skill) this.cast(u,target,0.9*powerScale,true,copy.skill); else if(target.skill&&!["mirrorStrike","allyCopy"].includes(target.skill.type)&&!["生ける贋作","同胞完全擬態","双貌の大勝負"].includes(target.skill.name)) this.cast(u,target,0.75*powerScale,true,target.skill); else hit(target,base,"magic"); break; }
+      case "総攻城命令": { const mark=[...foes()].sort((a,b)=>(b.shield+b.armor*8)-(a.shield+a.armor*8))[0]??target; mark.armor=Math.max(0,Math.round(mark.armor*0.5)); for(const a of allies()){a.atk=Math.round(a.atk*1.18);a.shield+=Math.round(base*0.3);a.targetUid=mark.uid;} this.floats.push({x:mark.x,y:mark.y,text:"🎯攻略目標",cls:"cast"}); break; }
 
       // ----- コスト5 -----
       case "世界樹の芽吹き": for (const a of allies()) { heal(a, base * 0.8); a.shield += Math.round(base * 0.45); a.mana = Math.min(a.maxMana - 1, a.mana + 15); } for (const t of foes()) if (dist(t, u) <= 3) t.stunTicks = Math.max(t.stunTicks, 12); break;
       case "存在消去": { const c = densest(); for (const t of foes()) if (dist(t,c)<=1) { t.stunTicks=Math.max(t.stunTicks,this.bossFight?15:35); t.silenceTicks=Math.max(t.silenceTicks,35); hit(t,base*0.8,"magic"); } break; }
       case "一閃・無明": { const victims=[...foes()].sort((a,b)=>a.hp-b.hp).slice(0,6); for(const t of victims){this.events.push({type:"slash",x:t.x,y:t.y});const alive=t.alive;hit(t,base*0.48,"physical");if(alive&&!t.alive){const next=[...foes()].sort((a,b)=>a.hp-b.hp)[0];if(next)hit(next,base*0.38,"physical");}} break; }
       case "終末火山": { const c=densest(); for(let i=0;i<3;i++)burst(c,1,base*0.38,"magic"); for(const t of foes())if(dist(t,c)<=2){t.poisonTicks=50;t.poisonPerHit=Math.max(t.poisonPerHit,Math.round(base*0.12));} burst(c,2,base*0.75,"magic"); break; }
-      case "時代逆行": for(const a of allies()){heal(a,a.maxHp*0.5);a.mana=Math.min(a.maxMana-1,a.mana+Math.round(a.maxMana*0.45));a.stunTicks=0;a.slowTicks=0;a.silenceTicks=0;} break;
+      case "時代逆行": for(const a of allies()){heal(a,a.maxHp*0.35+base*0.3);a.mana=Math.min(a.maxMana-1,a.mana+Math.round(a.maxMana*0.45));a.stunTicks=0;a.slowTicks=0;a.silenceTicks=0;a.fearTicks=0;} break;
       case "事象の地平線": { const c=densest(); const caught=foes().filter((t)=>dist(t,c)<=3); for(const t of caught){t.x+=Math.sign(c.x-t.x);t.y+=Math.sign(c.y-t.y);t.slowTicks=50;t.silenceTicks=18;} burst(c,2,base+caught.length*70,"magic"); break; }
       case "紅い夜": { let total=0; for(const t of foes()){const dealt=hit(t,base*0.32,"magic");total+=dealt;t.slowTicks=Math.max(t.slowTicks,20);} heal(u,total*0.7);u.atk=Math.round(u.atk*(1+Math.min(0.5,total/u.maxHp*0.2)));u.atkSpeed*=1.18;u.decoyCharges=Math.min(5,u.decoyCharges+2);break; }
       case "運命反転": { const enemy=[...foes()].sort((a,b)=>b.atk-a.atk)[0]??target; const ally=[...allies()].sort((a,b)=>a.atk-b.atk)[0]??u; const ea=enemy.atk, aa=ally.atk; enemy.atk=Math.max(10,Math.round(aa*0.8)); ally.atk=Math.round(ea*0.85); const armor=Math.min(80,enemy.armor);enemy.armor=Math.max(0,ally.armor);ally.armor+=Math.round(armor*0.5);hit(enemy,base*0.55,"magic");break; }
@@ -1403,7 +1460,7 @@ export class Battle {
   ): number {
     if (!shared && target.itemId === "shield_bow") {
       target.itemHitCount++;
-      if (target.itemHitCount % 5 === 0) {
+      if (target.itemHitCount % 4 === 0) {
         this.floats.push({ x: target.x, y: target.y, text: "回避", cls: "heal" });
         return 0;
       }
@@ -1449,6 +1506,7 @@ export class Battle {
     if (kind === "magic" && crit) dmg *= src.critMult;
     dmg = Math.max(1, Math.round(dmg));
 
+    const durabilityBefore = Math.max(0, target.hp) + Math.max(0, target.shield);
     let remain = dmg;
     const hadShield = target.shield > 0;
     if (hadShield) {
@@ -1458,6 +1516,9 @@ export class Battle {
     }
     if (hadShield && target.shield <= 0) this.recordScrap(target, "shield");
     target.hp -= remain;
+    const actualDamage = Math.min(dmg, durabilityBefore);
+    this.report(src).damageDealt += actualDamage;
+    this.report(target).damageTaken += actualDamage;
     this.floats.push({
       x: target.x,
       y: target.y,
@@ -1485,6 +1546,7 @@ export class Battle {
     const amount = Math.max(1, Math.round(raw));
     const missing = Math.max(0, unit.maxHp - unit.hp);
     unit.hp = Math.min(unit.maxHp, unit.hp + amount);
+    this.report(unit).healing += Math.min(amount, missing);
     const overflow = Math.max(0, amount - missing);
     const capPct = unit.itemId === "blade2" ? 0.3 : unit.itemId === "orb_blade" ? 0.2 : 0;
     if (overflow > 0 && capPct > 0) unit.shield = Math.min(Math.round(unit.maxHp * capPct), unit.shield + overflow);
@@ -1501,7 +1563,7 @@ export class Battle {
 
   private applyParasite(target: CombatUnit, splits: number) {
     if (!target.alive || target.parasitePct > 0) return;
-    target.parasitePct = [0, 0.01, 0.015, 0.02][this.parasiteTier];
+    target.parasitePct = [0, 0.015, 0.02, 0.03][this.parasiteTier];
     target.parasiteSplits = splits;
     this.floats.push({ x: target.x, y: target.y, text: "🪱寄生", cls: "poison" });
   }
@@ -1538,7 +1600,7 @@ export class Battle {
       this.twilightDeaths++;
       if (this.runRef.ancientRelics.includes("treasureAltar") && target.itemId) {
         const heir = this.units.filter((u) => u.alive && u.side === "ally").sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
-        if (heir) { heir.atk = Math.round(heir.atk * 1.2); heir.armor += 15; heir.spellPower += 25; heir.atkSpeed *= 1.1; heir.mana = Math.min(heir.maxMana - 1, heir.mana + 20); this.floats.push({ x: heir.x, y: heir.y, text: "継承", cls: "heal" }); }
+        if (heir) { heir.atk = Math.round(heir.atk * 1.3); heir.armor += 25; heir.spellPower += 35; heir.atkSpeed *= 1.2; heir.mana = Math.min(heir.maxMana - 1, heir.mana + 35); this.floats.push({ x: heir.x, y: heir.y, text: "継承", cls: "heal" }); }
       }
       if (this.runRef.ancientRelics.includes("twilightBell") && this.twilightDeaths >= 3 && !this.twilightTriggered) {
         this.twilightTriggered = true;
