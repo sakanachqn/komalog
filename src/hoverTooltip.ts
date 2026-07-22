@@ -27,7 +27,7 @@ function tooltipHtml(target: HTMLElement): string | null {
     const def = UNIT_BY_ID.get(unitTarget.dataset.unitTooltip!);
     if (!def) return null;
     const traits = def.traits.map((id: TraitId) => `${TRAITS[id].icon}${TRAITS[id].name}`).join("　");
-    return `<b>${def.icon} ${def.name}</b><div class="hover-meta"><span>射程</span><strong>${rangeLabel(def.range)}</strong></div><div class="hover-meta"><span>特性</span><strong>${traits}</strong></div><div class="hover-skill"><small>スキル</small><b>${def.skill.name}</b><em class="skill-scaling ${def.skill.scaling}">${scalingLabel(def.skill.scaling)}</em><p>${def.skill.desc}</p></div>`;
+    return `<b>${def.icon} ${def.name} <em class="unit-cost-badge cost-${def.cost}">コスト${def.cost}</em></b><div class="hover-meta"><span>射程</span><strong>${rangeLabel(def.range)}</strong></div><div class="hover-meta"><span>特性</span><strong>${traits}</strong></div><div class="hover-skill"><small>スキル</small><b>${def.skill.name}</b><em class="skill-scaling ${def.skill.scaling}">${scalingLabel(def.skill.scaling)}</em><p>${def.skill.desc}</p></div>`;
   }
 
   const itemTarget = target.closest<HTMLElement>("[data-item-tooltip]");

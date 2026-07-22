@@ -5,6 +5,7 @@ import type { Screen } from "./types";
 import { initHoverTooltips } from "./hoverTooltip";
 import { applySettingsClass } from "./settings";
 import { initBgm } from "./bgm";
+import { initUiButtonSounds } from "./sound";
 import {
   renderActClear,
   renderBattle,
@@ -24,6 +25,7 @@ const app = document.querySelector<HTMLDivElement>("#app")!;
 initHoverTooltips();
 applySettingsClass();
 initBgm();
+initUiButtonSounds();
 
 /** 再開可能な画面に来たら自動セーブ */
 function autoSave(s: Screen) {

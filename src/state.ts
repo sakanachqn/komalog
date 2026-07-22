@@ -4,7 +4,7 @@ import { rollItem, rollRelicChoices } from "./data/relics";
 import { rollAncientRelicChoices } from "./data/ancientRelics";
 import { UNIT_BY_ID } from "./data/units";
 import { generateMap } from "./map";
-import { grantUnlock, hasLegacy, legacyLevel, meta, saveMeta } from "./meta";
+import { grantUnlock, hasAchievementMilestone, hasLegacy, legacyLevel, meta, saveMeta } from "./meta";
 import type { OwnedUnit, RunState, UnitDef } from "./types";
 
 export const BOARD_COLS = 7;
@@ -17,7 +17,7 @@ export function newRun(starterDefIds: string[], asc = 0): RunState {
   const run: RunState = {
     playerHp: maxHp,
     playerMaxHp: maxHp,
-    gold: 10 + mods.startGold + legacyLevel("start_gold_") * 3,
+    gold: 10 + mods.startGold + legacyLevel("start_gold_") * 3 + (hasAchievementMilestone(10) ? 3 : 0),
     act: 1,
     asc,
     actRule: rollActRule(),
@@ -47,7 +47,13 @@ export function newRun(starterDefIds: string[], asc = 0): RunState {
   }
   // アセンションのバフ: 開始時アイテム・レリック
   for (let i = 0; i < mods.startItems; i++) run.items.push(rollItem());
+  if (hasLegacy("start_item")) run.items.push(rollItem());
+  if (hasAchievementMilestone(20)) run.items.push(rollItem());
   for (const r of rollRelicChoices([], mods.startRelics)) run.relics.push(r.id);
+  if (hasAchievementMilestone(30)) {
+    const reward = rollRelicChoices(run.relics, 1)[0];
+    if (reward) run.relics.push(reward.id);
+  }
   if (hasLegacy("start_ancient")) {
     const ancient = rollAncientRelicChoices([], 1)[0];
     if (ancient) run.ancientRelics.push(ancient.id);
@@ -56,6 +62,7 @@ export function newRun(starterDefIds: string[], asc = 0): RunState {
   autoPlace(run);
   meta().counters.totalRuns++;
   saveMeta();
+  if (meta().counters.totalRuns >= 10) grantUnlock("runs10");
   return run;
 }
 

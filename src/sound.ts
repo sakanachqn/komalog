@@ -56,6 +56,7 @@ function throttle(key: string, ms: number): boolean {
 }
 
 const ATTACK = 0.012; // ソフトアタック（クリックノイズ防止）
+let lastDedicatedActionAt = -Infinity;
 
 function tone(
   freq: number,
@@ -103,6 +104,18 @@ function noise(dur: number, vol: number, filterFreq: number) {
 }
 
 export const sfx = {
+  /** UI共通操作音。既存の購入・合成SE直後は二重再生を避ける。 */
+  ui(kind: "tap" | "confirm" | "cancel" = "tap") {
+    if (muted || performance.now() - lastDedicatedActionAt < 90 || !throttle(`ui-${kind}`, 45)) return;
+    if (kind === "confirm") {
+      tone(420, 0.1, "sine", 0.075, 560);
+      tone(620, 0.08, "sine", 0.045, undefined, 0.055);
+    } else if (kind === "cancel") {
+      tone(300, 0.11, "triangle", 0.06, 220);
+    } else {
+      tone(370, 0.075, "sine", 0.052, 335);
+    }
+  },
   /** 設定画面のSE音量確認用。スライダー操作中に鳴りすぎないよう間引く。 */
   preview() {
     if (muted || !throttle("preview", 90)) return;
@@ -143,12 +156,14 @@ export const sfx = {
   /** 購入・売却・報酬: 丸い2音チャイム */
   coin() {
     if (muted) return;
+    lastDedicatedActionAt = performance.now();
     tone(660, 0.09, "sine", 0.12);
     tone(990, 0.12, "sine", 0.12, undefined, 0.07);
   },
   /** 合成: 低いコツン+柔らかい上昇音 */
   craft() {
     if (muted) return;
+    lastDedicatedActionAt = performance.now();
     tone(200, 0.12, "triangle", 0.13, 150);
     tone(400, 0.18, "sine", 0.13, 620, 0.1);
   },
@@ -165,4 +180,21 @@ export const sfx = {
     notes.forEach((f, i) => tone(f, 0.35, "sine", 0.11, undefined, i * 0.2));
   },
 };
+
+let uiSoundsInitialized = false;
+
+/** 動的に生成されるものを含め、全画面のbuttonへ共通操作音を付ける。 */
+export function initUiButtonSounds(): void {
+  if (uiSoundsInitialized) return;
+  uiSoundsInitialized = true;
+  document.addEventListener("click", (event) => {
+    if (!(event.target instanceof Element)) return;
+    const button = event.target.closest<HTMLButtonElement>("button");
+    if (!button || button.disabled) return;
+    const label = button.textContent ?? "";
+    const cancelLike = button.classList.contains("modal-close") || /閉じる|戻る|やめる|キャンセル|諦める/.test(label);
+    const confirmLike = button.classList.contains("primary") || /開始|決定|受け取|進む|取引する|購入|雇う|合成/.test(label);
+    sfx.ui(cancelLike ? "cancel" : confirmLike ? "confirm" : "tap");
+  });
+}
 import { gameSettings } from "./settings";

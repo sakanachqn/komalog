@@ -161,6 +161,8 @@ export interface RunState {
   /** 現在のショップで残っている無料アイテム更新回数 */
   shopItemRerolls: number;
   shopRerollNodeId: number | null;
+  /** 現在の闇商人訪問で残っている「血の取引」の回数 */
+  rescueBloodTradesRemaining?: number;
   /** ラン終了報酬を受取済みか（再描画での二重取得防止） */
   legacyRewarded: boolean;
   /** 錬金術師が生成し、次戦闘開始時に自動使用されるポーション */
