@@ -2000,7 +2000,7 @@ button.primary:hover:not(:disabled) {
   border-radius: 999px;
 }
 .shop-owned-labels .board { color: #e9f5ff; background: rgba(55,120,200,.72); border: 1px solid rgba(105,175,255,.7); }
-.shop-owned-labels .bench { color: #ddd7e8; background: rgba(105,95,125,.58); border: 1px solid rgba(165,150,190,.46); }
+.shop-owned-labels .owned-bench { color: #ddd7e8; background: rgba(105,95,125,.58); border: 1px solid rgba(165,150,190,.46); }
 .unit-card .icon { font-size: 50px; }
 .unit-card .name { font-size: 17px; font-weight: bold; }
 .unit-card .cost { color: var(--gold); }
