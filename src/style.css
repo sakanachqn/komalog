@@ -2058,6 +2058,25 @@ button.primary:hover:not(:disabled) {
 .reduce-effects .attack-target-line { display: none; }
 .reduce-effects .shop-card-enter, .reduce-effects .reward-picked, .reduce-effects .map-node.chosen, .reduce-effects .map-inner svg line.available-path { animation: none; }
 
+.board-wrap[data-battle-speed="2"] .signature-particle:nth-of-type(even),
+.board-wrap[data-battle-speed="3"] .signature-particle,
+.board-wrap[data-battle-speed="3"] .shockwave-echo,
+.board-wrap[data-battle-speed="3"] .slash-fx-second { display: none; }
+.board-wrap[data-battle-speed="3"] .skill-cast-label { font-size: 8px; animation-duration: .55s; }
+.board-wrap[data-battle-speed="2"] .float-text,
+.board-wrap[data-battle-speed="3"] .float-text { animation-duration: .55s; }
+.first-visit-panel { width: min(520px, 94vw); text-align: center; }
+.first-visit-panel p { color: var(--text); line-height: 1.75; white-space: pre-line; }
+.run-build-review { width: min(920px, 100%); display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; margin: 12px auto; }
+.run-review-block { min-height: 112px; padding: 14px; text-align: left; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; }
+.run-review-block h3 { margin: 0 0 10px; color: var(--gold); font-size: 13px; }
+.run-review-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.run-review-chips span { padding: 5px 8px; font-size: 10px; cursor: help; background: var(--panel2); border: 1px solid rgba(255,255,255,.1); border-radius: 999px; }
+.run-ancient-chip { color: #ffe59c; border-color: rgba(240,192,96,.45) !important; }
+.run-mvp { display: block; margin-bottom: 10px; color: #fff0a2; line-height: 1.5; }
+.run-review-block small { display: block; color: var(--muted); line-height: 1.6; }
+@media (max-width: 760px) { .run-build-review { grid-template-columns: 1fr; } }
+
 /* 手持ち一覧ストリップ */
 .roster-strip {
   display: flex;

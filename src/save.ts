@@ -1,6 +1,7 @@
 import type { RunState } from "./types";
 
 const KEY = "autochess-rogue-save-v1";
+const BACKUP_KEY = "autochess-rogue-save-backup-v1";
 
 export interface ResumeInfo {
   kind: "map" | "prepare" | "shop" | "rest" | "event" | "actclear";
@@ -18,7 +19,10 @@ export interface SaveData {
 
 export function saveGame(data: SaveData) {
   try {
-    localStorage.setItem(KEY, JSON.stringify(data));
+    const next = JSON.stringify(data);
+    const current = localStorage.getItem(KEY);
+    if (current && parseSave(current)) localStorage.setItem(BACKUP_KEY, current);
+    localStorage.setItem(KEY, next);
   } catch {
     // ストレージが使えない環境では黙って諦める
   }
@@ -26,10 +30,11 @@ export function saveGame(data: SaveData) {
 
 export function loadGame(): SaveData | null {
   try {
-    const s = localStorage.getItem(KEY);
-    if (!s) return null;
-    const d = JSON.parse(s) as SaveData;
-    if (d?.v !== 1 || !d.run || !Array.isArray(d.run.roster)) return null;
+    const primary = localStorage.getItem(KEY);
+    const backup = localStorage.getItem(BACKUP_KEY);
+    const d = (primary ? parseSave(primary) : null) ?? (backup ? parseSave(backup) : null);
+    if (!d) return null;
+    if (primary && !parseSave(primary) && backup) localStorage.setItem(KEY, backup);
     // 旧バージョンのセーブにフィールドを補完
     d.run.asc ??= 0;
     d.run.actRule ??= "bloodmoon";
@@ -53,9 +58,19 @@ export function loadGame(): SaveData | null {
   }
 }
 
+function parseSave(raw: string): SaveData | null {
+  try {
+    const d = JSON.parse(raw) as SaveData;
+    if (d?.v !== 1 || !d.run || !Array.isArray(d.run.roster) || !Array.isArray(d.run.map)) return null;
+    if (!Number.isFinite(d.run.playerHp) || !Number.isFinite(d.run.gold) || d.run.act < 1 || d.run.act > 3) return null;
+    return d;
+  } catch { return null; }
+}
+
 export function clearSave() {
   try {
     localStorage.removeItem(KEY);
+    localStorage.removeItem(BACKUP_KEY);
   } catch {
     /* noop */
   }

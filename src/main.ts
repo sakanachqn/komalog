@@ -27,6 +27,34 @@ applySettingsClass();
 initBgm();
 initUiButtonSounds();
 
+document.addEventListener("keydown", (event) => {
+  const target = event.target as HTMLElement | null;
+  if (target?.matches("input, textarea, select") || target?.isContentEditable) return;
+  if (event.key === "Escape") {
+    const overlay = [...document.querySelectorAll<HTMLElement>(".modal-overlay")].at(-1);
+    if (overlay) { event.preventDefault(); overlay.remove(); }
+    return;
+  }
+  if (document.querySelector(".modal-overlay")) return;
+  if (event.code === "Space") {
+    const start = document.querySelector<HTMLButtonElement>('[data-shortcut="battle-start"]:not(:disabled)');
+    if (start) { event.preventDefault(); start.click(); }
+    return;
+  }
+  if (event.key.toLowerCase() === "r") {
+    const reroll = document.querySelector<HTMLButtonElement>('[data-shortcut="shop-reroll"]:not(:disabled)');
+    if (reroll) { event.preventDefault(); reroll.click(); }
+    return;
+  }
+  if (/^[1-3]$/.test(event.key)) {
+    const speed = document.querySelector<HTMLButtonElement>('[data-shortcut="battle-speed"]');
+    if (!speed) return;
+    const desired = Number(event.key);
+    let guard = 0;
+    while (ctx.battleSpeed !== desired && guard++ < 3) speed.click();
+  }
+});
+
 /** 再開可能な画面に来たら自動セーブ */
 function autoSave(s: Screen) {
   if (!ctx.run) return;

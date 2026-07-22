@@ -190,6 +190,23 @@ function showSettings(): void {
   document.body.appendChild(overlay);
 }
 
+function showFirstVisitGuide(key: string, title: string, text: string): void {
+  const storageKey = `komalog-guide-${key}-v1`;
+  try {
+    if (localStorage.getItem(storageKey)) return;
+    localStorage.setItem(storageKey, "1");
+  } catch { /* ストレージ不可でもゲーム進行は継続 */ }
+  window.setTimeout(() => {
+    if (document.querySelector(".first-visit-guide")) return;
+    const overlay = el("div", "modal-overlay first-visit-guide");
+    const panel = el("div", "modal-panel first-visit-panel");
+    panel.append(el("h2", "", title), el("p", "", text), btn("わかった", "primary", () => overlay.remove()));
+    overlay.appendChild(panel);
+    overlay.addEventListener("click", (event) => { if (event.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+  }, 80);
+}
+
 function showTutorial(): void {
   if (document.querySelector(".tutorial-overlay")) return;
   const overlay = el("div", "modal-overlay tutorial-overlay");
@@ -523,6 +540,7 @@ const HELP_HTML = `
     <li>「戦闘開始」を押すと<b>自動で戦闘</b>（操作は不要）</li>
     <li>勝てばゴールドと報酬、負ければプレイヤーHPが減る</li>
   </ol>
+  <p><b>キーボード：</b>Spaceで戦闘開始、1～3で戦闘速度、Rでショップ更新、Escでポップアップを閉じる。</p>
 </section>
 <section>
   <h4>🖱️ 配置のしかた</h4>
@@ -1529,6 +1547,7 @@ export function renderPrepare(node: MapNode): HTMLElement {
   let justDragged = false; // ドラッグ直後のclickイベントを無視するためのフラグ
 
   const s = el("div");
+  showFirstVisitGuide("prepare", "🧩 編成と装備", "ユニットはドラッグ＆ドロップで配置・交換できます。アイテムもユニットへドラッグして装備し、素材2個は合成工房で強力なアイテムにできます。");
   s.appendChild(hud(run));
   const area = el("div", "board-area");
   const boardHolder = el("div", "prepare-board-column");
@@ -1921,7 +1940,8 @@ export function renderPrepare(node: MapNode): HTMLElement {
     const cap = teamCap(run);
     bar.append(
       el("span", "", `配置 ${boardUnits(run).length}/${cap}`),
-      btn("⚔️ 戦闘開始", "primary", () => {
+      (() => {
+        const start = btn("⚔️ 戦闘開始", "primary", () => {
         // 盤面に空きがあればベンチの左から自動で埋める
         autoPlace(run);
         if (boardUnits(run).length === 0) {
@@ -1930,7 +1950,10 @@ export function renderPrepare(node: MapNode): HTMLElement {
           return;
         }
         go({ kind: "battle", node });
-      }),
+        });
+        start.dataset.shortcut = "battle-start";
+        return start;
+      })(),
     );
     boardHolder.appendChild(bar);
 
@@ -2145,13 +2168,17 @@ export function renderBattle(node: MapNode): HTMLElement {
 
   let speed = ctx.battleSpeed;
   const bar = el("div", "toolbar");
-  const speedBtn = btn(`⏩ 速度 x${speed}`, "", () => {
-    speed = speed >= 3 ? 1 : speed + 1;
+  const applySpeed = (value: number) => {
+    speed = Math.max(1, Math.min(3, value));
     ctx.battleSpeed = speed;
     speedBtn.textContent = `⏩ 速度 x${speed}`;
+    wrap.dataset.battleSpeed = String(speed);
     clearInterval(timer);
     timer = window.setInterval(step, TICK_MS / speed);
-  });
+  };
+  const speedBtn = btn(`⏩ 速度 x${speed}`, "", () => applySpeed(speed >= 3 ? 1 : speed + 1));
+  speedBtn.dataset.shortcut = "battle-speed";
+  wrap.dataset.battleSpeed = String(speed);
   bar.appendChild(speedBtn);
   boardHolder.appendChild(bar);
 
@@ -2345,8 +2372,8 @@ export function renderBattle(node: MapNode): HTMLElement {
         link.style.top = `calc(6px + ${from.y} * (var(--cell) + 2px) + var(--cell) / 2)`;
         link.style.width = `${Math.hypot(dx, dy)}px`;
         link.style.transform = `rotate(${Math.atan2(dy, dx)}rad)`;
-        wrap.appendChild(link);
-        setTimeout(() => link.remove(), 150);
+        if (speed < 3) wrap.appendChild(link);
+        setTimeout(() => link.remove(), Math.round(150 / speed));
         if (ev.ranged) {
           fireProjectile(from, to);
         } else {
@@ -2377,7 +2404,7 @@ export function renderBattle(node: MapNode): HTMLElement {
           const bossCast = cu.side === "enemy" && node.type === "boss";
           const label = el("div", `skill-cast-label${bossCast ? " boss-cast" : ""}`, `${bossCast ? "⚠ " : ""}${cu.skill.name}`);
           e.root.appendChild(label);
-          setTimeout(() => label.remove(), 900);
+          setTimeout(() => label.remove(), Math.round(900 / Math.sqrt(speed)));
         }
         sfx.cast();
         break;
@@ -2449,7 +2476,7 @@ export function renderBattle(node: MapNode): HTMLElement {
       ft.style.left = `calc(6px + ${f.x} * (var(--cell) + 2px) + var(--cell) / 2 + ${jitterX}px)`;
       ft.style.top = `calc(2px + ${f.y} * (var(--cell) + 2px))`;
       wrap.appendChild(ft);
-      setTimeout(() => ft.remove(), 800);
+      setTimeout(() => ft.remove(), Math.round(800 / Math.sqrt(speed)));
     }
     const res = battle.result;
     if (res) {
@@ -2701,6 +2728,7 @@ function unitCard(def: UnitDef, action: string, onClick: () => void): HTMLElemen
 
 export function renderShop(node: MapNode, rescue = false): HTMLElement {
   const run = ctx.run!;
+  showFirstVisitGuide("shop", "🛒 ショップ", "ユニット・アイテム・レリックを購入できます。Rキーでユニット候補をリロール。★アップ候補や、盤面・ベンチにいる仲間にはラベルが表示されます。");
   // 救済ショップ（ボス敗北後の闇商人）は割高。アセンション・幕の掟の割増も加算
   const markup =
     ascMods(run.asc).shopMarkup + (ACT_RULE_BY_ID.get(run.actRule)?.e.shopMarkup ?? 0);
@@ -2875,7 +2903,8 @@ export function renderShop(node: MapNode, rescue = false): HTMLElement {
 
     bar.innerHTML = "";
     bar.append(
-      btn(`🎲 リロール (${rerollPrice}G)`, "", () => {
+      (() => {
+        const reroll = btn(`🎲 リロール (${rerollPrice}G)`, "", () => {
         if (run.gold < rerollPrice) {
           showAttentionMessage(msg, `⚠️ ゴールドが足りない！ あと ${rerollPrice - run.gold}G 必要です`);
           return;
@@ -2883,7 +2912,10 @@ export function renderShop(node: MapNode, rescue = false): HTMLElement {
         run.gold -= rerollPrice;
         offers = rollOffers();
         rerenderAll();
-      }),
+        });
+        reroll.dataset.shortcut = "shop-reroll";
+        return reroll;
+      })(),
       ...(itemRerollMax > 0
         ? [btn(`🔄 アイテム更新（残り${run.shopItemRerolls}回）`, "", () => {
             if (run.shopItemRerolls <= 0) {
@@ -3142,6 +3174,7 @@ const EVENTS: GameEvent[] = [
 
 export function renderEvent(_node: MapNode): HTMLElement {
   const run = ctx.run!;
+  showFirstVisitGuide("event", "❓ イベント", "イベントでは報酬と代償を選びます。HPやゴールドが減る選択もあるため、現在の余力を見て決めましょう。");
   const ev = EVENTS[Math.floor(Math.random() * EVENTS.length)];
   const s = el("div");
   s.appendChild(hud(run));
@@ -3181,6 +3214,7 @@ export function renderEvent(_node: MapNode): HTMLElement {
 
 export function renderActClear(clearedAct: number): HTMLElement {
   const run = ctx.run!;
+  if (clearedAct < 3) showFirstVisitGuide("ancient", "✨ 古代レリック", "幕ボス撃破後に得られる、通常より強力で特殊なレリックです。編成の方向性を大きく変えるため、現在のシナジーとの相性を確認しましょう。");
   if (clearedAct === 1) {
     grantUnlock("reach_act2");
     grantUnlock("clear_act1");
@@ -3358,8 +3392,47 @@ export function renderGameover(win: boolean, abandoned = false): HTMLElement {
   }
   const activeTraits = computeTraits(boardUnits(run), run.ancientRelics).filter((trait) => trait.tier > 0);
   const summary = el("div", "run-summary");
-  summary.innerHTML = `<b>今回の編成</b><span>配置 ${boardUnits(run).length}体 ／ ★合計 ${boardUnits(run).reduce((sum, unit) => sum + unit.star, 0)}</span><span>発動シナジー ${activeTraits.length}種 ／ 古代レリック ${run.ancientRelics.length}個</span>`;
+  summary.innerHTML = `<b>今回の冒険記録</b><span>到達：第${run.act}幕 フロア${run.floorIndex + 1} ／ 勝利 ${run.battleCount}回</span><span>配置 ${boardUnits(run).length}体 ／ ★合計 ${boardUnits(run).reduce((sum, unit) => sum + unit.star, 0)} ／ 発動シナジー ${activeTraits.length}種</span><span>レリック ${run.relics.length}個 ／ 古代レリック ${run.ancientRelics.length}個 ／ 所持金 ${run.gold}G</span>`;
   s.appendChild(summary);
+  const buildReview = el("div", "run-build-review");
+  const team = el("section", "run-review-block");
+  team.appendChild(el("h3", "", "主力編成"));
+  const teamChips = el("div", "run-review-chips");
+  for (const unit of boardUnits(run).sort((a, b) => b.star - a.star).slice(0, 8)) {
+    const def = unitDef(unit);
+    const chip = el("span", "run-unit-chip", `${def.icon} ${def.name} ${starsText(unit.star)}`);
+    chip.dataset.unitTooltip = def.id;
+    teamChips.appendChild(chip);
+  }
+  team.appendChild(teamChips);
+  const build = el("section", "run-review-block");
+  build.appendChild(el("h3", "", "完成したビルド"));
+  const buildChips = el("div", "run-review-chips");
+  for (const trait of activeTraits.slice(0, 6)) {
+    const info = TRAITS[trait.trait];
+    const chip = el("span", "run-trait-chip", `${info.icon} ${info.name} ${trait.count}体`);
+    chip.dataset.traitTooltip = trait.trait;
+    chip.dataset.traitTier = String(trait.tier);
+    buildChips.appendChild(chip);
+  }
+  for (const id of run.ancientRelics) {
+    const relic = ANCIENT_RELIC_BY_ID.get(id);
+    if (!relic) continue;
+    const chip = el("span", "run-ancient-chip", `${relic.icon} ${relic.name}`);
+    chip.dataset.ancientRelicTooltip = id;
+    buildChips.appendChild(chip);
+  }
+  build.appendChild(buildChips);
+  const finalAllies = ctx.lastBattleReport.filter((row) => row.side === "ally").sort((a, b) => b.damageDealt - a.damageDealt);
+  if (!abandoned && finalAllies.length > 0) {
+    const combat = el("section", "run-review-block");
+    combat.appendChild(el("h3", "", "最終戦ハイライト"));
+    const totalDamage = finalAllies.reduce((sum, row) => sum + row.damageDealt, 0);
+    const totalHeal = finalAllies.reduce((sum, row) => sum + row.healing, 0);
+    combat.append(el("b", "run-mvp", `🏆 MVP ${finalAllies[0].name}　${Math.round(finalAllies[0].damageDealt).toLocaleString()}ダメージ`), el("small", "", `味方合計：与ダメージ ${Math.round(totalDamage).toLocaleString()} ／ 回復 ${Math.round(totalHeal).toLocaleString()}`));
+    buildReview.append(team, build, combat);
+  } else buildReview.append(team, build);
+  s.appendChild(buildReview);
   const nextLegacy = LEGACY_UPGRADES
     .filter((up) => !hasLegacy(up.id) && (!up.requires || hasLegacy(up.requires)))
     .sort((a, b) => a.cost - b.cost)[0];
