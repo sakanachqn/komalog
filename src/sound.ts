@@ -21,6 +21,7 @@ export function toggleMute(): boolean {
   } catch {
     /* noop */
   }
+  window.dispatchEvent(new Event("komalog-audio-change"));
   return muted;
 }
 
@@ -30,7 +31,7 @@ function out(): GainNode | null {
     if (!actx) {
       actx = new AudioContext();
       master = actx.createGain();
-      master.gain.value = gameSettings().volume;
+      master.gain.value = gameSettings().seVolume;
       const lowpass = actx.createBiquadFilter();
       lowpass.type = "lowpass";
       lowpass.frequency.value = 2000;
@@ -38,7 +39,7 @@ function out(): GainNode | null {
       master.connect(lowpass).connect(actx.destination);
     }
     if (actx.state === "suspended") void actx.resume();
-    if (master) master.gain.value = gameSettings().volume;
+    if (master) master.gain.value = gameSettings().seVolume;
     return master;
   } catch {
     return null;
@@ -102,6 +103,11 @@ function noise(dur: number, vol: number, filterFreq: number) {
 }
 
 export const sfx = {
+  /** 設定画面のSE音量確認用。スライダー操作中に鳴りすぎないよう間引く。 */
+  preview() {
+    if (muted || !throttle("preview", 90)) return;
+    tone(520, 0.12, "sine", 0.12, 680);
+  },
   /** 通常攻撃ヒット: こもった短いポフ音 */
   hit() {
     if (muted || !throttle("hit", 120)) return;

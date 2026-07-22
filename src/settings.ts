@@ -1,17 +1,27 @@
 export interface GameSettings {
-  volume: number;
+  seVolume: number;
+  bgmVolume: number;
   screenShake: boolean;
   reducedEffects: boolean;
 }
 
 const KEY = "komalog-settings-v1";
-const defaults: GameSettings = { volume: 0.7, screenShake: true, reducedEffects: false };
+const defaults: GameSettings = { seVolume: 0.7, bgmVolume: 0.32, screenShake: true, reducedEffects: false };
 let current = load();
 
 function load(): GameSettings {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return { ...defaults, ...JSON.parse(raw) };
+    if (raw) {
+      const saved = JSON.parse(raw) as Partial<GameSettings> & { volume?: number };
+      // 旧「全体音量」を、当時とほぼ同じ聞こえ方になる2系統へ移行する。
+      return {
+        ...defaults,
+        ...saved,
+        seVolume: saved.seVolume ?? saved.volume ?? defaults.seVolume,
+        bgmVolume: saved.bgmVolume ?? (saved.volume !== undefined ? saved.volume * 0.45 : defaults.bgmVolume),
+      };
+    }
   } catch { /* noop */ }
   return { ...defaults };
 }
@@ -22,6 +32,7 @@ export function updateSettings(patch: Partial<GameSettings>): GameSettings {
   current = { ...current, ...patch };
   try { localStorage.setItem(KEY, JSON.stringify(current)); } catch { /* noop */ }
   applySettingsClass();
+  window.dispatchEvent(new Event("komalog-audio-change"));
   return current;
 }
 

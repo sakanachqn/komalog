@@ -86,12 +86,15 @@ function showSettings(): void {
   const head = el("div", "modal-head");
   head.append(el("h2", "", "⚙️ 設定"), btn("✕", "modal-close", () => overlay.remove()));
   const body = el("div", "settings-body");
-  const volumeRow = el("label", "setting-row");
-  const volumeText = el("span", "", `効果音の音量 ${Math.round(gameSettings().volume * 100)}%`);
-  const volume = document.createElement("input");
-  volume.type = "range"; volume.min = "0"; volume.max = "100"; volume.value = String(Math.round(gameSettings().volume * 100));
-  volume.addEventListener("input", () => { volumeText.textContent = `効果音の音量 ${volume.value}%`; updateSettings({ volume: Number(volume.value) / 100 }); });
-  volumeRow.append(volumeText, volume);
+  const volumeRow = (label: string, value: number, onChange: (value: number) => void) => {
+    const row = el("label", "setting-row");
+    const text = el("span", "", `${label} ${Math.round(value * 100)}%`);
+    const slider = document.createElement("input");
+    slider.type = "range"; slider.min = "0"; slider.max = "100"; slider.value = String(Math.round(value * 100));
+    slider.addEventListener("input", () => { text.textContent = `${label} ${slider.value}%`; onChange(Number(slider.value) / 100); });
+    row.append(text, slider);
+    return row;
+  };
   const toggleRow = (label: string, desc: string, checked: boolean, onChange: (value: boolean) => void) => {
     const row = el("label", "setting-toggle");
     const copy = el("span"); copy.append(el("b", "", label), el("small", "", desc));
@@ -100,7 +103,8 @@ function showSettings(): void {
     row.append(copy, input); return row;
   };
   body.append(
-    volumeRow,
+    volumeRow("SE音量", gameSettings().seVolume, (value) => { updateSettings({ seVolume: value }); sfx.preview(); }),
+    volumeRow("BGM音量", gameSettings().bgmVolume, (value) => updateSettings({ bgmVolume: value })),
     toggleRow("画面揺れ", "クリティカルや大技で盤面を揺らす", gameSettings().screenShake, (value) => updateSettings({ screenShake: value })),
     toggleRow("演出を軽減", "閃光・衝撃波・細かなパーティクルを減らす", gameSettings().reducedEffects, (value) => updateSettings({ reducedEffects: value })),
   );
@@ -205,6 +209,22 @@ function showTutorial(): void {
   render();
 }
 
+function compactVolumeControl(label: string, value: number, onChange: (value: number) => void): HTMLElement {
+  const row = el("label", "title-volume-row");
+  const text = el("span", "", `${label} ${Math.round(value * 100)}%`);
+  const slider = document.createElement("input");
+  slider.type = "range";
+  slider.min = "0";
+  slider.max = "100";
+  slider.value = String(Math.round(value * 100));
+  slider.addEventListener("input", () => {
+    text.textContent = `${label} ${slider.value}%`;
+    onChange(Number(slider.value) / 100);
+  });
+  row.append(text, slider);
+  return row;
+}
+
 function hud(run: RunState, onAbandon?: () => void): HTMLElement {
   const h = el("div", "hud");
   const progress = Math.min(100, ((run.floorIndex + 1) / FLOOR_COUNT) * 100);
@@ -254,7 +274,7 @@ function hud(run: RunState, onAbandon?: () => void): HTMLElement {
   settingsBtn.addEventListener("click", showSettings);
   h.appendChild(settingsBtn);
   const muteBtn = el("button", "mute-btn", isMuted() ? "🔇" : "🔊");
-  muteBtn.title = "効果音のオン/オフ";
+  muteBtn.title = "BGM・効果音のオン/オフ";
   muteBtn.addEventListener("click", () => {
     muteBtn.textContent = toggleMute() ? "🔇" : "🔊";
   });
@@ -739,6 +759,7 @@ export function renderTitle(): HTMLElement {
   const s = el("div", "title-screen");
   const layout = el("div", "title-layout");
   const hero = el("section", "title-hero");
+  const menuColumn = el("div", "title-menu-column");
   const menu = el("section", "title-menu");
   hero.appendChild(el("h1", "", "⚔️ コマログ"));
   hero.appendChild(el("div", "tagline", "― 駒を並べて、魔王まで ―"));
@@ -807,7 +828,6 @@ export function renderTitle(): HTMLElement {
   sanctuaryRow.appendChild(btn("🎓 チュートリアル", "", () => showTutorial()));
   const infoRow = el("div", "toolbar title-action-row");
   infoRow.appendChild(btn("📖 遊び方", "", () => showHelp()));
-  infoRow.appendChild(btn("⚙️ 設定", "", () => showSettings()));
   infoRow.appendChild(
     btn("💬 感想を送る", "", () => {
       window.open(FEEDBACK_FORM_URL, "_blank", "noopener,noreferrer");
@@ -815,8 +835,37 @@ export function renderTitle(): HTMLElement {
   );
   actions.append(playRow, sanctuaryRow, infoRow);
   menu.append(el("h2", "", save ? "冒険を再開" : "新しい冒険"), actions);
-  layout.append(hero, menu);
+
+  const titleSettings = el("section", "title-settings-panel");
+  const settingToggle = (label: string, desc: string, checked: boolean, onChange: (value: boolean) => void) => {
+    const row = el("label", "title-setting-toggle");
+    const copy = el("span");
+    copy.append(el("b", "", label), el("small", "", desc));
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = checked;
+    input.addEventListener("change", () => onChange(input.checked));
+    row.append(copy, input);
+    return row;
+  };
+  titleSettings.append(
+    el("h3", "", "⚙️ 設定"),
+    compactVolumeControl("SE", gameSettings().seVolume, (value) => { updateSettings({ seVolume: value }); sfx.preview(); }),
+    compactVolumeControl("BGM", gameSettings().bgmVolume, (value) => updateSettings({ bgmVolume: value })),
+    settingToggle("画面揺れ", "クリティカルや大技で盤面を揺らす", gameSettings().screenShake, (value) => updateSettings({ screenShake: value })),
+    settingToggle("演出を軽減", "閃光・衝撃波・細かな粒子を減らす", gameSettings().reducedEffects, (value) => updateSettings({ reducedEffects: value })),
+  );
+  menuColumn.append(menu, titleSettings);
+  layout.append(hero, menuColumn);
   s.appendChild(layout);
+  const bgmCredit = el("div", "title-bgm-credit");
+  bgmCredit.append("BGM: DOVA-SYNDROME ", Object.assign(document.createElement("a"), {
+    href: "https://dova-s.jp/bgm/detail/23161/",
+    target: "_blank",
+    rel: "noopener noreferrer",
+    textContent: "「春の訪れ」by えだまめ88",
+  }));
+  s.appendChild(bgmCredit);
   return s;
 }
 
