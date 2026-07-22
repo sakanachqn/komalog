@@ -329,12 +329,19 @@ function hud(run: RunState, onAbandon?: () => void): HTMLElement {
   if (run.scrap > 0) h.appendChild(el("span", "", `🔧 ${run.scrap}/5`));
   if (run.relics.length > 0) {
     const row = el("span", "relic-row");
-    for (const id of run.relics) {
+    const visibleRelics = run.relics.slice(0, 6);
+    for (const id of visibleRelics) {
       const d = RELIC_BY_ID.get(id)!;
       const icon = el("span", "relic-icon", d.icon);
       icon.dataset.relicTooltip = d.id;
       icon.title = `${d.name}: ${d.desc}`;
       row.appendChild(icon);
+    }
+    if (run.relics.length > visibleRelics.length) {
+      const overflow = el("span", "relic-overflow", `+${run.relics.length - visibleRelics.length}`);
+      overflow.dataset.relicOverflow = JSON.stringify(run.relics.slice(visibleRelics.length));
+      overflow.title = "残りのレリックを表示";
+      row.appendChild(overflow);
     }
     h.appendChild(row);
   }
@@ -345,7 +352,7 @@ function hud(run: RunState, onAbandon?: () => void): HTMLElement {
       if (!d) continue;
       const icon = el("span", "relic-icon ancient-relic-icon", d.icon);
       icon.dataset.ancientRelicTooltip = d.id;
-      icon.title = `エンシェントレリック「${d.name}」: ${d.desc}`;
+      icon.title = `古代レリック「${d.name}」: ${d.desc}`;
       row.appendChild(icon);
     }
     h.appendChild(row);
@@ -554,7 +561,7 @@ const HELP_HTML = `
   所持中のレリックは画面上部にアイコンで並ぶ（カーソルを合わせると効果が見える）。</p>
 </section>
 <section>
-  <h4>✨ エンシェントレリック</h4>
+  <h4>✨ 古代レリック</h4>
   <p><b>第1幕と第2幕のボス撃破後</b>に、3つの候補から1つだけ選べる特別な遺物。
   配置上限を倍にする、特定シナジーの戦い方を変えるなど、通常レリックより強力で特殊な効果を持つ。
   画面上部では輝く枠のアイコンで表示され、ラン終了まで変更できない。</p>
@@ -1346,7 +1353,7 @@ function showStartAncientPick(s: HTMLElement, onComplete: () => void): void {
   if (choices.length === 0) { onComplete(); return; }
   discoverAncientRelics(choices.map((relic) => relic.id));
   s.innerHTML = "";
-  s.append(el("h2", "", "✨ 太古の継承"), el("div", "sub", "旅立ちに持ち込むエンシェントレリックを1つ選ぼう："));
+  s.append(el("h2", "", "✨ 太古の継承"), el("div", "sub", "旅立ちに持ち込む古代レリックを1つ選ぼう："));
   const row = el("div", "card-row ancient-choice-row");
   for (const relic of choices) {
     const card = el("button", "option-card ancient-card");
@@ -1409,6 +1416,11 @@ export function renderMap(): HTMLElement {
 
   const xPct = (col: number) => 12.5 + col * 25;
   const yPx = (floor: number) => (FLOOR_COUNT - 1 - floor) * rowH + rowH / 2;
+  const current = run.map.find((n) => n.id === run.currentNodeId) ?? null;
+  const available = current
+    ? run.map.filter((n) => current.next.includes(n.id))
+    : run.map.filter((n) => n.floor === 0);
+  if (current && available.length === 0) available.push(current);
 
   // 接続線
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -1420,17 +1432,14 @@ export function renderMap(): HTMLElement {
       line.setAttribute("y1", `${yPx(n.floor)}`);
       line.setAttribute("x2", `${xPct(t.col)}%`);
       line.setAttribute("y2", `${yPx(t.floor)}`);
+      if (current && n.id === current.id && current.next.includes(t.id)) line.classList.add("available-path");
+      else if (current && t.floor <= current.floor) line.classList.add("visited-path");
       svg.appendChild(line);
     }
   }
   inner.appendChild(svg);
 
-  const current = run.map.find((n) => n.id === run.currentNodeId) ?? null;
-  const available = current
-    ? run.map.filter((n) => current.next.includes(n.id))
-    : run.map.filter((n) => n.floor === 0);
   // ボス戦に敗北した場合など行き先がないときは、現在ノードに再挑戦できる
-  if (current && available.length === 0) available.push(current);
 
   const nodeTip = el("div", "map-node-tooltip");
   inner.appendChild(nodeTip);
@@ -1455,7 +1464,11 @@ export function renderMap(): HTMLElement {
     if (n === current) b.classList.add("current");
     if (isAvail) {
       b.classList.add("available");
-      b.addEventListener("click", () => enterNode(n));
+      b.addEventListener("click", () => {
+        b.classList.add("chosen");
+        sfx.ui("confirm");
+        window.setTimeout(() => enterNode(n), document.documentElement.classList.contains("reduce-effects") ? 0 : 180);
+      });
       b.addEventListener("pointerenter", () => {
         nodeTip.innerHTML = nodeDetail(n);
         nodeTip.style.left = `${xPct(n.col)}%`;
@@ -1545,9 +1558,22 @@ export function renderPrepare(node: MapNode): HTMLElement {
           ghost = el("div", "drag-ghost", def.icon);
           document.body.appendChild(ghost);
           elm.classList.add("dragging");
+          boardHolder.querySelector(".board-wrap")?.classList.add("unit-drag-active");
         }
         ghost.style.left = `${ev.clientX}px`;
         ghost.style.top = `${ev.clientY}px`;
+        boardHolder.querySelectorAll(".drop-target, .drop-invalid, .exchange-target").forEach((node) => node.classList.remove("drop-target", "drop-invalid", "exchange-target"));
+        const hover = document.elementFromPoint(ev.clientX, ev.clientY);
+        const hoverUnit = hover?.closest<HTMLElement>(".unit.ally, .bench-slot[data-iid]");
+        const hoverCell = hover?.closest<HTMLElement>(".cell");
+        const hoverBench = hover?.closest<HTMLElement>(".bench-slot");
+        if (hoverUnit && Number(hoverUnit.dataset.iid) !== ou.iid) hoverUnit.classList.add("exchange-target");
+        else if (hoverBench) hoverBench.classList.add("drop-target");
+        else if (hoverCell) {
+          const allyZone = Number(hoverCell.dataset.y) >= 4;
+          const capBlocked = ou.pos === null && boardUnits(run).length >= teamCap(run);
+          hoverCell.classList.add(allyZone && !capBlocked ? "drop-target" : "drop-invalid");
+        }
       };
       const onUp = (ev: PointerEvent) => {
         window.removeEventListener("pointermove", onMove);
@@ -1555,6 +1581,8 @@ export function renderPrepare(node: MapNode): HTMLElement {
         if (!ghost) return; // 動かしていない → 通常のクリックとして処理
         ghost.remove();
         elm.classList.remove("dragging");
+        boardHolder.querySelector(".board-wrap")?.classList.remove("unit-drag-active");
+        boardHolder.querySelectorAll(".drop-target, .drop-invalid, .exchange-target").forEach((node) => node.classList.remove("drop-target", "drop-invalid", "exchange-target"));
         justDragged = true;
         setTimeout(() => (justDragged = false), 50);
         dropAt(ou, ev.clientX, ev.clientY);
@@ -1621,6 +1649,7 @@ export function renderPrepare(node: MapNode): HTMLElement {
       }
     }
     selected = null;
+    sfx.ui("tap");
     refresh();
   }
 
@@ -2143,19 +2172,20 @@ export function renderBattle(node: MapNode): HTMLElement {
     e.hpText.textContent = cu.shield > 0 ? `${Math.ceil(cu.hp)} +${Math.ceil(cu.shield)}` : `${Math.ceil(cu.hp)}`;
     if (e.mana) e.mana.style.width = `${Math.min(100, (cu.mana / cu.maxMana) * 100)}%`;
     e.root.classList.toggle("stunned", cu.alive && cu.stunTicks > 0);
-    const statusList: Array<[boolean, string, string]> = [
-      [cu.stunTicks > 0, "💫", "スタン"],
-      [cu.silenceTicks > 0, "🔇", "沈黙"],
-      [cu.poisonTicks > 0 || cu.parasitePct > 0, "☠️", "毒・寄生"],
-      [cu.fearTicks > 0, "😱", "恐怖"],
-      [cu.slowTicks > 0, "🐌", "速度低下"],
-      [cu.shield > 0, "🛡️", "シールド"],
-      [cu.ghostTicks > 0, "👻", "霊体"],
+    const statusList: Array<[boolean, string, string, number | null]> = [
+      [cu.stunTicks > 0, "💫", "スタン", cu.stunTicks],
+      [cu.silenceTicks > 0, "🔇", "沈黙", cu.silenceTicks],
+      [cu.poisonTicks > 0 || cu.parasitePct > 0, "☠️", "毒・寄生", cu.poisonTicks || null],
+      [cu.fearTicks > 0, "😱", "恐怖", cu.fearTicks],
+      [cu.slowTicks > 0, "🐌", "速度低下", cu.slowTicks],
+      [cu.shield > 0, "🛡️", "シールド", null],
+      [cu.ghostTicks > 0, "👻", "霊体", cu.ghostTicks],
     ];
     e.statuses.innerHTML = "";
-    for (const [, icon, label] of statusList.filter(([active]) => active).slice(0, 4)) {
+    for (const [, icon, label, ticks] of statusList.filter(([active]) => active).slice(0, 4)) {
       const badge = el("span", "", icon);
-      badge.title = label;
+      if (ticks !== null) badge.appendChild(el("small", "", `${Math.max(0.1, ticks * TICK_MS / 1000).toFixed(1)}`));
+      badge.title = `${label}${ticks !== null ? `（残り約${(ticks * TICK_MS / 1000).toFixed(1)}秒）` : ""}`;
       e.statuses.appendChild(badge);
     }
     if (!cu.alive && !e.root.classList.contains("dead")) {
@@ -2308,6 +2338,15 @@ export function renderBattle(node: MapNode): HTMLElement {
         const from = unitByUid.get(ev.fromUid)!;
         const to = unitByUid.get(ev.toUid)!;
         if (!from.alive) break; // 同tick内で倒れた場合はモーション不要
+        const link = el("div", `attack-target-line ${from.side}`);
+        const dx = (to.x - from.x) * 64;
+        const dy = (to.y - from.y) * 64;
+        link.style.left = `calc(6px + ${from.x} * (var(--cell) + 2px) + var(--cell) / 2)`;
+        link.style.top = `calc(6px + ${from.y} * (var(--cell) + 2px) + var(--cell) / 2)`;
+        link.style.width = `${Math.hypot(dx, dy)}px`;
+        link.style.transform = `rotate(${Math.atan2(dy, dx)}rad)`;
+        wrap.appendChild(link);
+        setTimeout(() => link.remove(), 150);
         if (ev.ranged) {
           fireProjectile(from, to);
         } else {
@@ -2334,6 +2373,12 @@ export function renderBattle(node: MapNode): HTMLElement {
         const cu = unitByUid.get(ev.uid);
         const e = unitEls.get(ev.uid);
         if (e && cu?.alive) { replay(e.root, "casting"); spawnCastAura(cu); spawnSignatureFx(cu); }
+        if (e && cu?.skill) {
+          const bossCast = cu.side === "enemy" && node.type === "boss";
+          const label = el("div", `skill-cast-label${bossCast ? " boss-cast" : ""}`, `${bossCast ? "⚠ " : ""}${cu.skill.name}`);
+          e.root.appendChild(label);
+          setTimeout(() => label.remove(), 900);
+        }
         sfx.cast();
         break;
       }
@@ -2566,14 +2611,17 @@ function buildResult(node: MapNode, win: boolean, hpLost: number): HTMLElement {
       s.appendChild(battleReport());
       return s;
     }
+    const knownRelics = new Set(meta().discoveredRelics);
     discoverRelics(relics.map((relic) => relic.id));
     const row = el("div", "card-row");
     for (const r of relics) {
       const card = el("button", "option-card");
       card.innerHTML = `<span class="icon">${r.icon}</span><b>${r.name}</b><br>${r.desc}`;
+      if (!knownRelics.has(r.id)) card.appendChild(el("span", "discovery-badge", "NEW"));
       card.addEventListener("click", () => {
         run.relics.push(r.id);
-        go({ kind: "map" });
+        card.classList.add("reward-picked");
+        window.setTimeout(() => go({ kind: "map" }), document.documentElement.classList.contains("reduce-effects") ? 0 : 220);
       });
       row.appendChild(card);
     }
@@ -2598,13 +2646,17 @@ function buildResult(node: MapNode, win: boolean, hpLost: number): HTMLElement {
   const renderChoices = () => {
     row.innerHTML = "";
     for (const def of choices) {
-      row.appendChild(unitCard(def, `仲間にする`, () => {
+      const firstInRun = !run.roster.some((unit) => unit.defId === def.id);
+      const card = unitCard(def, `仲間にする`, () => {
         if (!addUnit(run, def)) {
           showRewardBenchSale(def, () => go({ kind: "map" }));
           return;
         }
-        go({ kind: "map" });
-      }));
+        card.classList.add("reward-picked");
+        window.setTimeout(() => go({ kind: "map" }), document.documentElement.classList.contains("reduce-effects") ? 0 : 220);
+      });
+      if (firstInRun) card.appendChild(el("span", "discovery-badge", "初加入"));
+      row.appendChild(card);
     }
   };
   renderChoices();
@@ -2741,6 +2793,8 @@ export function renderShop(node: MapNode, rescue = false): HTMLElement {
       if (!id) continue;
       const d = ITEM_BY_ID.get(id)!;
       const card = el("button", "option-card");
+      card.classList.add("shop-card-enter");
+      if (run.gold < itemPrice) card.classList.add("unaffordable");
       const shopIcon = el("span", "icon");
       shopIcon.appendChild(itemArt(d));
       card.append(shopIcon, el("b", "", d.name), document.createElement("br"), document.createTextNode(d.desc), document.createElement("br"), el("span", "gold-text", `💰 ${itemPrice}G`));
@@ -2761,6 +2815,8 @@ export function renderShop(node: MapNode, rescue = false): HTMLElement {
     if (relicOffer) {
       const r = RELIC_BY_ID.get(relicOffer)!;
       const card = el("button", "option-card relic-card");
+      card.classList.add("shop-card-enter");
+      if (run.gold < relicPrice) card.classList.add("unaffordable");
       card.innerHTML = `<span class="icon">${r.icon}</span><b>${r.name}</b>（レリック）<br>${r.desc}<br><span class="gold-text">💰 ${relicPrice}G</span>`;
       card.addEventListener("click", () => {
         if (run.gold < relicPrice) {
@@ -2797,6 +2853,12 @@ export function renderShop(node: MapNode, rescue = false): HTMLElement {
         sfx.coin();
         rerenderAll();
       });
+      card.classList.add("shop-card-enter");
+      if (run.gold < unitPrice(def)) card.classList.add("unaffordable");
+      if (benchUnits(run).length >= BENCH_SIZE && !upgradeStar) {
+        card.classList.add("bench-blocked");
+        card.appendChild(el("span", "shop-cap-warning", "⚠ ベンチ満員"));
+      }
       if (boardCopies > 0 || benchCopies > 0) {
         const labels = el("div", "shop-owned-labels");
         if (boardCopies > 0) labels.appendChild(el("span", "board", `盤面 ${boardCopies}`));
@@ -3160,7 +3222,7 @@ export function renderActClear(clearedAct: number): HTMLElement {
         persist();
       }
       discoverAncientRelics(run.pendingAncientChoices);
-      s.appendChild(el("h3", "ancient-heading", "✨ エンシェントレリックを1つ選ぼう"));
+      s.appendChild(el("h3", "ancient-heading", "✨ 古代レリックを1つ選ぼう"));
       s.appendChild(el("div", "sub", "通常のレリックを超える、強力で特殊な遺物。選択はラン終了まで変更できない。"));
       const row = el("div", "card-row ancient-choice-row");
       for (const id of run.pendingAncientChoices) {

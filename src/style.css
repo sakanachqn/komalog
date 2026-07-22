@@ -451,6 +451,20 @@ button.primary:hover:not(:disabled) {
   cursor: help;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
 }
+.relic-overflow {
+  display: inline-grid;
+  place-items: center;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 4px;
+  color: var(--gold);
+  font-size: 10px;
+  font-weight: 900;
+  cursor: help;
+  background: rgba(240,192,96,.1);
+  border: 1px solid rgba(240,192,96,.4);
+  border-radius: 7px;
+}
 .ancient-relic-row {
   padding-left: 6px;
   border-left: 1px solid rgba(240, 192, 96, 0.45);
@@ -872,6 +886,8 @@ button.primary:hover:not(:disabled) {
   stroke-width: 2;
   stroke-dasharray: 4 4;
 }
+.map-inner svg line.visited-path { stroke: rgba(133,119,166,.55); stroke-dasharray: none; }
+.map-inner svg line.available-path { stroke: var(--gold); stroke-width: 3; animation: mapPathPulse 1.2s ease-in-out infinite; }
 .map-node {
   position: absolute;
   transform: translate(-50%, -50%);
@@ -894,7 +910,9 @@ button.primary:hover:not(:disabled) {
 .map-node.current {
   border-color: var(--accent);
   background: var(--accent);
+  box-shadow: 0 0 0 5px rgba(126,92,184,.2), 0 0 22px rgba(160,120,230,.65);
 }
+.map-node.chosen { animation: mapNodeChosen .18s ease-out forwards; }
 .map-node.visited {
   opacity: 0.45;
 }
@@ -931,6 +949,8 @@ button.primary:hover:not(:disabled) {
   0%, 100% { box-shadow: 0 0 8px rgba(240, 192, 96, 0.4); }
   50% { box-shadow: 0 0 18px rgba(240, 192, 96, 0.8); }
 }
+@keyframes mapPathPulse { 50% { stroke-width: 5; opacity: .7; } }
+@keyframes mapNodeChosen { to { transform: translate(-50%, -50%) scale(1.28); filter: brightness(1.5); } }
 .map-legend {
   display: flex;
   flex-wrap: wrap;
@@ -1003,6 +1023,11 @@ button.primary:hover:not(:disabled) {
 .unit.dragging {
   opacity: 0.35;
 }
+.board-wrap.unit-drag-active .cell.ally-zone { border-color: rgba(105,190,130,.4); background: rgba(70,150,95,.08); }
+.board-wrap.unit-drag-active .cell.enemy-zone { border-color: rgba(220,90,100,.35); background: rgba(170,55,65,.07); }
+.cell.drop-target, .bench-slot.drop-target { border-color: #78e39a !important; background: rgba(70,180,105,.28) !important; box-shadow: inset 0 0 16px rgba(85,225,125,.3), 0 0 10px rgba(85,225,125,.35); }
+.cell.drop-invalid { border-color: #e45f6d !important; background: rgba(190,55,70,.26) !important; }
+.unit.exchange-target, .bench-slot.exchange-target { outline: 2px solid #ffd66e; outline-offset: 2px; filter: brightness(1.2); }
 .drag-ghost {
   position: fixed;
   z-index: 100;
@@ -1038,7 +1063,15 @@ button.primary:hover:not(:disabled) {
 }
 .unit .bar-label { position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 7px; line-height: 1; text-shadow: 0 1px 2px #000; }
 .unit-statuses { position: absolute; top: 4px; right: 1px; z-index: 4; display: flex; flex-direction: column; gap: 1px; }
-.unit-statuses span { width: 16px; height: 16px; display: grid; place-items: center; border-radius: 50%; background: rgba(20,18,26,.9); border: 1px solid rgba(255,255,255,.25); font-size: 10px; }
+.unit-statuses span { position: relative; width: 16px; height: 16px; display: grid; place-items: center; border-radius: 50%; background: rgba(20,18,26,.9); border: 1px solid rgba(255,255,255,.25); font-size: 10px; }
+.unit-statuses span small { position: absolute; right: -5px; bottom: -5px; min-width: 13px; padding: 0 2px; color: #fff; font-size: 6px; line-height: 9px; text-align: center; background: rgba(20,18,26,.95); border-radius: 4px; }
+.skill-cast-label { position: absolute; z-index: 12; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%); padding: 3px 7px; color: #fff0b0; font-size: 9px; font-weight: 900; white-space: nowrap; background: rgba(35,25,55,.92); border: 1px solid rgba(210,175,255,.55); border-radius: 6px; animation: castNameIn .9s ease-out forwards; pointer-events: none; }
+.skill-cast-label.boss-cast { color: #ffe2df; background: rgba(92,22,30,.95); border-color: rgba(255,110,105,.85); box-shadow: 0 0 12px rgba(255,65,65,.45); }
+.attack-target-line { position: absolute; z-index: 2; height: 2px; transform-origin: left center; opacity: .5; pointer-events: none; animation: targetLineFade .15s linear forwards; }
+.attack-target-line.ally { background: linear-gradient(90deg, #72e6b1, transparent); }
+.attack-target-line.enemy { background: linear-gradient(90deg, #ff7878, transparent); }
+@keyframes castNameIn { 0% { opacity: 0; transform: translate(-50%,5px) scale(.9); } 20%,70% { opacity: 1; transform: translate(-50%,0) scale(1); } 100% { opacity: 0; transform: translate(-50%,-8px); } }
+@keyframes targetLineFade { to { opacity: 0; } }
 .unit .bar > i {
   position: absolute;
   top: 0;
@@ -1924,6 +1957,15 @@ button.primary:hover:not(:disabled) {
   border-color: var(--gold);
   background: var(--panel);
 }
+.unit-card.unaffordable, .option-card.unaffordable { filter: saturate(.45); opacity: .68; }
+.unit-card.unaffordable .cost, .option-card.unaffordable .gold-text { color: #ff7878; font-weight: 900; }
+.shop-cap-warning { padding: 2px 7px; color: #ffd5d5; font-size: 9px; font-weight: 900; background: rgba(150,35,45,.72); border-radius: 999px; }
+.shop-card-enter { animation: shopCardEnter .24s ease-out both; }
+.discovery-badge { position: absolute; top: 7px; right: 7px; z-index: 2; padding: 3px 7px; color: #182411; font-size: 9px; font-weight: 1000; background: #a9ef78; border-radius: 999px; box-shadow: 0 0 12px rgba(169,239,120,.45); }
+.unit-card:has(.discovery-badge), .option-card:has(.discovery-badge) { position: relative; }
+.reward-picked { animation: rewardPicked .22s ease-out forwards !important; pointer-events: none; }
+@keyframes shopCardEnter { from { opacity: 0; transform: translateY(7px) scale(.97); } }
+@keyframes rewardPicked { to { transform: scale(1.08); border-color: #fff0a2; box-shadow: 0 0 30px rgba(240,192,96,.65); } }
 .card-row .unit-card.shop-star-upgrade {
   position: relative;
   border-color: #ffd45f;
@@ -2008,6 +2050,13 @@ button.primary:hover:not(:disabled) {
   transform: translateY(-3px);
   background: var(--panel2);
 }
+.hover-relic-list { display: grid; gap: 7px; max-height: 280px; margin-top: 8px; overflow-y: auto; }
+.hover-relic-list > div { display: grid; grid-template-columns: 24px 1fr; gap: 6px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,.08); }
+.hover-relic-list p { margin: 0; }
+.hover-relic-list strong, .hover-relic-list small { display: block; }
+.hover-relic-list small { margin-top: 2px; color: var(--muted); font-size: 10px; line-height: 1.35; }
+.reduce-effects .attack-target-line { display: none; }
+.reduce-effects .shop-card-enter, .reduce-effects .reward-picked, .reduce-effects .map-node.chosen, .reduce-effects .map-inner svg line.available-path { animation: none; }
 
 /* 手持ち一覧ストリップ */
 .roster-strip {
