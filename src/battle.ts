@@ -20,6 +20,7 @@ export interface CombatUnit {
   side: "ally" | "enemy";
   name: string;
   icon: string;
+  cost: number;
   star: number;
   traits: TraitId[];
   x: number;
@@ -67,6 +68,8 @@ export interface CombatUnit {
   itemCastCount: number;
   itemRevenge: boolean;
   itemGuaranteedCrit: boolean;
+  relicDamageMult: number;
+  pursuitStacks: number;
 }
 
 export interface FloatText {
@@ -170,6 +173,7 @@ export function buildAllyUnit(
         side: "ally",
         name: def.name,
         icon: def.icon,
+        cost: def.cost,
         star: u.star,
         traits: [...def.traits],
         x: u.pos?.x ?? 0,
@@ -217,6 +221,8 @@ export function buildAllyUnit(
         itemCastCount: 0,
         itemRevenge: false,
         itemGuaranteedCrit: false,
+        relicDamageMult: 1,
+        pursuitStacks: 0,
       };
       // シナジー適用（3段階）
       if (def.traits.includes("warrior")) cu.armor += [0, 20, 45, 80][tierOf("warrior")];
@@ -296,6 +302,16 @@ export function buildAllyUnit(
       if (has("vampFang")) cu.lifesteal += 0.1;
       if (has("manaStone")) cu.mana += Math.round(cu.maxMana * 0.3);
       if (has("hourglass")) cu.mana += 20;
+      if (has("mossArmor") && cu.range === 1) { cu.armor += 15; const add = Math.round(cu.maxHp * 0.1); cu.maxHp += add; cu.hp += add; }
+      if (has("farLens") && cu.range >= 3) { cu.atk = Math.round(cu.atk * 1.15); cu.spellPower += 15; }
+      if (has("noviceStardust") && u.star === 1) { cu.maxHp = Math.round(cu.maxHp * 1.15); cu.hp = cu.maxHp; cu.atk = Math.round(cu.atk * 1.15); cu.spellPower += 15; }
+      if (has("veteranBadge") && u.star >= 2) { cu.armor += 12; cu.critChance += 0.1; }
+      if (has("critScope")) cu.critMult += 0.3;
+      if (has("balanceCrest") && traits.filter((t) => t.tier > 0).length >= 3) { cu.maxHp = Math.round(cu.maxHp * 1.1); cu.hp = cu.maxHp; cu.atk = Math.round(cu.atk * 1.1); }
+      if (has("duelistMark") && u.pos) {
+        const adjacent = run.roster.some((other) => other.iid !== u.iid && other.pos && Math.max(Math.abs(other.pos.x - u.pos!.x), Math.abs(other.pos.y - u.pos!.y)) <= 1);
+        if (!adjacent) cu.relicDamageMult *= 1.18;
+      }
       // エンシェントレリック（通常レリックとは別枠）
       const hasAncient = (id: string) => run.ancientRelics.includes(id);
       const scaleHp = (mult: number) => {
@@ -402,6 +418,8 @@ export class Battle {
   private twilightTriggered = false;
   private lighthouseTriggered = new Set<number>();
   private allyCastCount = 0;
+  private openingBellActive = false;
+  private phoenixFeatherUsed = false;
   bonusGold = 0;
   private reports = new Map<number, BattleUnitReport>();
 
@@ -420,6 +438,7 @@ export class Battle {
   }
 
   private recordShield(source: CombatUnit, target: CombatUnit, amount: number): void {
+    if (source.side === "ally" && this.runRef?.relics.includes("silverVial")) amount *= 1.18;
     const value = Math.max(0, Math.round(amount));
     target.shield += value;
     this.report(source).shielding += value;
@@ -442,6 +461,19 @@ export class Battle {
 
     for (const u of board) {
       this.units.push(buildAllyUnit(run, u, traits, this.nextUid++));
+    }
+    if (run.relics.includes("rearOath")) {
+      const allies = this.units.filter((u) => u.side === "ally");
+      const rearY = Math.max(...allies.map((u) => u.y));
+      const chosen = allies.filter((u) => u.y === rearY).sort((a, b) => Math.max(b.atk, b.spellPower) - Math.max(a.atk, a.spellPower))[0];
+      if (chosen) { chosen.atk = Math.round(chosen.atk * 1.2); chosen.spellPower += 20; }
+    }
+    if (run.relics.includes("guidingLamp")) {
+      for (const u of [...this.units].filter((x) => x.side === "ally").sort((a, b) => a.mana - b.mana).slice(0, 3)) u.mana = Math.min(u.maxMana - 1, u.mana + 15);
+    }
+    if (run.relics.includes("openingBell")) {
+      this.openingBellActive = true;
+      for (const u of this.units.filter((x) => x.side === "ally")) u.atkSpeed *= 1.2;
     }
     const hasAncient = (id: string) => run.ancientRelics.includes(id);
     const alliesNow = () => this.units.filter((u) => u.side === "ally");
@@ -478,6 +510,7 @@ export class Battle {
         side: "enemy",
         name: s.def.name,
         icon: s.def.icon,
+        cost: 1,
         star: 1,
         traits: [],
         x: s.x,
@@ -525,6 +558,8 @@ export class Battle {
         itemCastCount: 0,
         itemRevenge: false,
         itemGuaranteedCrit: false,
+        relicDamageMult: 1,
+        pursuitStacks: 0,
       });
     }
 
@@ -622,6 +657,10 @@ export class Battle {
     return this.units.filter((u) => u.alive && u.side === "enemy").length;
   }
 
+  get hasSurvivingEquippedAlly(): boolean {
+    return this.units.some((u) => u.alive && u.side === "ally" && u.itemId !== null);
+  }
+
   /** 狂戦士ボーナスを含む実効攻撃力 */
   private atkOf(u: CombatUnit): number {
     let mult = u.shield > 0 ? 1 + u.shieldAtkBonus : 1;
@@ -635,6 +674,10 @@ export class Battle {
     this.floats = [];
     this.events = [];
     this.ticks++;
+    if (this.ticks === 50 && this.openingBellActive) {
+      this.openingBellActive = false;
+      for (const u of this.units.filter((x) => x.alive && x.side === "ally")) u.atkSpeed /= 1.2;
+    }
     if (this.ticks === 50 && this.runRef.ancientRelics.includes("reverseHourglass")) {
       for (const u of this.units.filter((x) => x.alive && x.side === "ally")) {
         const snap = this.openingSnapshot.get(u.uid);
@@ -843,11 +886,17 @@ export class Battle {
     if (u.itemRevenge) { dmg *= 1.2; u.itemRevenge = false; }
     this.events.push({ type: "attack", fromUid: u.uid, toUid: target.uid, ranged: u.range > 1 });
     const dealt = this.dealDamage(u, target, dmg, "physical", crit);
+    if (u.side === "enemy" && target.side === "ally" && this.runRef.relics.includes("bloodthornRing") && dealt > 0 && u.alive) {
+      this.dealDamage(target, u, dealt * 0.15, "magic", false, true);
+    }
     if (u.lifesteal > 0 && dealt > 0) {
       const mult = u.itemId === "blade_claw" && crit ? 2 : 1;
       this.itemHeal(u, dealt * u.lifesteal * mult);
     }
     u.itemAttackCount++;
+    if (u.side === "ally" && this.runRef.relics.includes("poisonWhetstone") && u.itemAttackCount % 4 === 0 && target.alive) {
+      this.dealDamage(u, target, this.atkOf(u) * 0.6, "magic", false, true);
+    }
     const bonusMana = u.itemId === "staff_bow" || u.itemId === "bow_crystal" ? 5 : 0;
     u.mana += Math.round((10 + bonusMana) * u.manaGainMult);
     if (target.alive) target.mana += Math.round(5 * target.manaGainMult);
@@ -876,6 +925,8 @@ export class Battle {
       sk.scaling === "attack"
         ? (this.atkOf(u) * sk.power * powerScale * u.skillPowerMult) / 100
         : sk.power * (1 + u.spellPower / 100) * powerScale * u.skillPowerMult;
+    if (!isEcho && u.side === "ally" && this.runRef.relics.includes("emberCharm") && u.itemCastCount === 0) base *= 1.2;
+    if (u.side === "ally" && this.runRef.relics.includes("silverVial") && ["heal", "healAll", "linkedHeal"].includes(sk.type)) base *= 1.18;
     if (u.itemId === "sword_staff" && sk.scaling === "attack") base *= 1 + u.spellPower * 0.0025;
     if (u.itemId === "staff_orb" && ["heal", "shield", "healAll", "rally", "linkedHeal"].includes(sk.type)) base *= 1.3;
     const firstItemCast = !isEcho && u.itemCastCount === 0;
@@ -886,9 +937,19 @@ export class Battle {
     this.floats.push({ x: u.x, y: u.y, text: isEcho ? `共鳴:${sk.name}` : sk.name, cls: "cast" });
     this.events.push({ type: "cast", uid: u.uid });
 
-    if (!isEcho && u.side === "ally" && this.runRef.ancientRelics.includes("dragonHeart")) {
+    if (!isEcho && u.side === "enemy" && this.runRef.relics.includes("manaEye")) {
+      for (const ally of this.units.filter((x) => x.alive && x.side === "ally")) ally.mana = Math.min(ally.maxMana - 1, ally.mana + 2);
+    }
+    if (!isEcho && u.side === "ally" && this.runRef.relics.includes("guardianChain")) {
+      for (const ally of this.units.filter((x) => x.alive && x.side === "ally" && x.uid !== u.uid && chebDistance(x, u) <= 1)) this.recordShield(u, ally, u.maxHp * 0.05);
+    }
+
+    if (!isEcho && u.side === "ally") {
       this.allyCastCount++;
-      if (this.allyCastCount % 6 === 0) {
+      if (this.runRef.relics.includes("chainRosary") && this.allyCastCount % 5 === 0) {
+        for (const ally of this.units.filter((x) => x.alive && x.side === "ally")) ally.mana = Math.min(ally.maxMana - 1, ally.mana + 8);
+      }
+      if (this.runRef.ancientRelics.includes("dragonHeart") && this.allyCastCount % 6 === 0) {
         for (const enemy of this.units.filter((x) => x.alive && x.side === "enemy")) this.dealDamage(u, enemy, Math.min(500, enemy.maxHp * 0.05), "magic", false, true);
         for (const ally of this.units.filter((x) => x.alive && x.side === "ally")) { ally.hp = Math.min(ally.maxHp, ally.hp + Math.round(ally.maxHp * 0.05)); this.events.push({ type: "buff", uid: ally.uid, fx: "heal" }); }
       }
@@ -1018,8 +1079,7 @@ export class Battle {
         this.events.push({ type: "skillshot", fromUid: u.uid, toX: target.x, toY: target.y, fx: sk.fx ?? "shadow" });
         const dealt = this.dealDamage(u, target, base, kind, false);
         if (dealt > 0) {
-          u.hp = Math.min(u.maxHp, u.hp + dealt);
-          this.floats.push({ x: u.x, y: u.y, text: `+${dealt}`, cls: "heal" });
+          this.itemHeal(u, dealt);
         }
         break;
       }
@@ -1369,7 +1429,8 @@ export class Battle {
       for (const t of foes()) if (dist(t, center) <= radius) hit(t, amount, damageKind);
     };
     const heal = (a: CombatUnit, amount: number) => {
-      const boosted = u.itemId === "staff_orb" ? amount * 1.3 : amount;
+      let boosted = u.itemId === "staff_orb" ? amount * 1.3 : amount;
+      if (u.side === "ally" && this.runRef.relics.includes("silverVial")) boosted *= 1.18;
       const actual = Math.max(0, Math.min(a.maxHp - a.hp, Math.round(boosted)));
       a.hp += actual;
       this.report(u).healing += actual;
@@ -1490,6 +1551,14 @@ export class Battle {
       return 0;
     }
     let dmg = raw;
+    if (!shared && src.side === "ally" && target.side === "enemy") {
+      dmg *= src.relicDamageMult;
+      if (this.runRef.relics.includes("executionWrit") && target.hp <= target.maxHp * 0.2) dmg *= 1.25;
+      if (this.runRef.relics.includes("hunterMonocle")) {
+        const highest = Math.max(...this.units.filter((u) => u.alive && u.side === "enemy").map((u) => u.maxHp));
+        if (target.maxHp >= highest) dmg *= 1.15;
+      }
+    }
     if (src.itemId === "sword_orb" && target.maxHp > src.maxHp) dmg *= 1.2;
     if (src.itemId === "sword_blade" && target.hp < target.maxHp * 0.3) dmg *= 1.25;
     if (src.itemGuaranteedCrit) {
@@ -1543,6 +1612,7 @@ export class Battle {
 
   private itemHeal(unit: CombatUnit, raw: number) {
     if (!unit.alive || raw <= 0) return;
+    if (unit.side === "ally" && this.runRef.relics.includes("silverVial")) raw *= 1.18;
     const amount = Math.max(1, Math.round(raw));
     const missing = Math.max(0, unit.maxHp - unit.hp);
     unit.hp = Math.min(unit.maxHp, unit.hp + amount);
@@ -1590,11 +1660,25 @@ export class Battle {
       this.floats.push({ x: target.x, y: target.y, text: "👻霊体", cls: "heal" });
       return;
     }
+    if (target.side === "ally" && this.runRef.relics.includes("phoenixFeather") && !this.phoenixFeatherUsed) {
+      this.phoenixFeatherUsed = true;
+      target.hp = Math.max(1, Math.round(target.maxHp * 0.2));
+      target.mana = 0;
+      target.shield = 0;
+      target.decoyCharges = Math.max(target.decoyCharges, 1);
+      this.events.push({ type: "buff", uid: target.uid, fx: "heal" });
+      this.floats.push({ x: target.x, y: target.y, text: "🪶復活", cls: "heal" });
+      return;
+    }
     target.alive = false;
     target.hp = 0;
     this.events.push({ type: "death", uid: target.uid });
     this.deathHistory.push(target);
     if (killer?.alive) killer.targetUid = null;
+    if (killer?.alive && killer.side === "ally" && target.side === "enemy" && this.runRef.relics.includes("pursuitSpur") && killer.pursuitStacks < 3) {
+      killer.pursuitStacks++;
+      killer.atkSpeed *= 1.12;
+    }
 
     if (target.side === "ally") {
       this.twilightDeaths++;

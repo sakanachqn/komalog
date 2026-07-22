@@ -45,6 +45,7 @@ export function loadGame(): SaveData | null {
     d.run.legacyRewarded ??= false;
     d.run.potions ??= [];
     d.run.scrap ??= 0;
+    d.run.relicItemDropBonus ??= 0;
     for (const u of d.run.roster) u.hpBonus ??= 0;
     return d;
   } catch {

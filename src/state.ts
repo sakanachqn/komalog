@@ -39,6 +39,7 @@ export function newRun(starterDefIds: string[], asc = 0): RunState {
     legacyRewarded: false,
     potions: [],
     scrap: 0,
+    relicItemDropBonus: 0,
     items: [],
   };
   for (const id of starterDefIds) {

@@ -91,7 +91,7 @@ function render(s: Screen) {
       app.appendChild(renderGameover(s.win, s.abandoned ?? false));
       break;
   }
-  if (s.kind !== "title") {
+  if (s.kind !== "title" && s.kind !== "prepare") {
     const book = document.createElement("button");
     book.className = "global-compendium-btn";
     book.textContent = "📚 図鑑";

@@ -9,15 +9,15 @@ import {
 } from "./battle";
 import type { BattleEvent, CombatUnit } from "./battle";
 import { enemyTeamFor } from "./data/enemies";
-import { ANCIENT_RELIC_BY_ID, rollAncientRelicChoices } from "./data/ancientRelics";
-import { BASE_ITEM_IDS, CRAFT_RECIPES, ITEMS, ITEM_BY_ID, RELIC_BY_ID, craftResult, rollItem, rollRelicChoices } from "./data/relics";
+import { ANCIENT_RELIC_BY_ID, ANCIENT_RELICS, rollAncientRelicChoices } from "./data/ancientRelics";
+import { BASE_ITEM_IDS, CRAFT_RECIPES, ITEMS, ITEM_BY_ID, RELICS, RELIC_BY_ID, craftResult, rollItem, rollRelicChoices } from "./data/relics";
 import { TRAITS, UNITS, UNIT_BY_ID, rollUnitDef } from "./data/units";
 import { loadGame, saveGame } from "./save";
 import type { SaveData } from "./save";
 import { isMuted, sfx, toggleMute } from "./sound";
 import { ASC_LEVELS, MAX_ASC, ascMods } from "./ascension";
 import { ACT_RULE_BY_ID, rollActRule } from "./data/actrules";
-import { LEGACY_UPGRADES, UNLOCK_INFO, bumpCounter, buyLegacy, grantUnlock, hasLegacy, hasUnlock, legacyLevel, meta, saveMeta } from "./meta";
+import { LEGACY_UPGRADES, UNLOCK_INFO, bumpCounter, buyLegacy, discoverAncientRelics, discoverRelics, grantUnlock, hasLegacy, hasUnlock, legacyLevel, meta, saveMeta } from "./meta";
 import { FLOOR_COUNT, NODE_META } from "./map";
 import { ctx, go } from "./router";
 import {
@@ -58,6 +58,54 @@ function btn(label: string, cls: string, onClick: () => void): HTMLButtonElement
   const b = el("button", cls, label);
   b.addEventListener("click", onClick);
   return b;
+}
+
+function showAttentionMessage(target: HTMLElement, text: string): void {
+  target.textContent = text;
+  target.classList.remove("attention-message");
+  // 同じ警告を続けて出した場合もアニメーションを再生する
+  void target.offsetWidth;
+  target.classList.add("attention-message");
+}
+
+function showNormalMessage(target: HTMLElement, text: string): void {
+  target.classList.remove("attention-message");
+  target.textContent = text;
+}
+
+function showRewardBenchSale(def: UnitDef, onReceived: () => void): void {
+  if (document.querySelector(".reward-sale-overlay")) return;
+  const run = ctx.run!;
+  const overlay = el("div", "modal-overlay reward-sale-overlay");
+  const panel = el("div", "modal-panel reward-sale-panel");
+  const head = el("div", "modal-head");
+  head.append(el("h2", "", "🪑 ベンチがいっぱいです"), btn("✕", "modal-close", () => overlay.remove()));
+  panel.append(
+    head,
+    el("div", "reward-pending", `${def.icon} ${def.name} を迎えるため、ベンチのユニットを1体売却してください。`),
+  );
+  const list = el("div", "reward-sale-list");
+  for (const owned of benchUnits(run)) {
+    const ownedDef = unitDef(owned);
+    const value = ownedDef.cost * (owned.star === 1 ? 1 : owned.star === 2 ? 3 : 9);
+    const card = el("div", "reward-sale-unit");
+    const identity = el("span", "reward-sale-identity", `${ownedDef.icon} ${ownedDef.name} ${starsText(owned.star)}`);
+    identity.dataset.unitTooltip = ownedDef.id;
+    card.append(
+      identity,
+      btn(`売却して受取 (+${value}G)`, "danger", () => {
+        sellUnit(run, owned.iid);
+        if (!addUnit(run, def)) return;
+        sfx.coin();
+        overlay.remove();
+        onReceived();
+      }),
+    );
+    list.appendChild(card);
+  }
+  panel.append(list, btn("報酬選択に戻る", "", () => overlay.remove()));
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
 }
 
 function showAbandonConfirm(onConfirm: () => void): void {
@@ -226,6 +274,8 @@ function compactVolumeControl(label: string, value: number, onChange: (value: nu
 }
 
 function hud(run: RunState, onAbandon?: () => void): HTMLElement {
+  discoverRelics(run.relics);
+  discoverAncientRelics(run.ancientRelics);
   const h = el("div", "hud");
   const progress = Math.min(100, ((run.floorIndex + 1) / FLOOR_COUNT) * 100);
   const journey = el("span", "hud-journey");
@@ -526,14 +576,19 @@ export function showHelp() {
   document.body.appendChild(overlay);
 }
 
-type CompendiumTab = "units" | "traits" | "items";
+type CompendiumTab = "units" | "traits" | "items" | "relics" | "ancientRelics";
+
+/** 公開環境の進行には触れず、ローカル確認時だけ図鑑情報を全開示する。 */
+const LOCAL_COMPENDIUM_DEBUG = ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
 
 /** タイトル・ラン中のどちらからでも開ける共通図鑑。 */
 export function showCompendium(initialTab: CompendiumTab = "units") {
   const overlay = el("div", "modal-overlay");
   const panel = el("div", "modal-panel compendium-panel");
   const head = el("div", "modal-head");
-  head.append(el("h2", "", "📚 冒険図鑑"), btn("✕", "modal-close", () => close()));
+  const title = el("h2", "", "📚 冒険図鑑");
+  if (LOCAL_COMPENDIUM_DEBUG) title.appendChild(el("small", "compendium-debug-badge", "LOCAL全開示"));
+  head.append(title, btn("✕", "modal-close", () => close()));
   const tabs = el("div", "compendium-tabs");
   const body = el("div", "modal-body compendium-body");
   const foot = el("div", "toolbar");
@@ -543,6 +598,7 @@ export function showCompendium(initialTab: CompendiumTab = "units") {
 
   let active = initialTab;
   let unitTraitFilter: TraitId | "all" = "all";
+  const unitKnown = (def: UnitDef) => LOCAL_COMPENDIUM_DEBUG || !def.unlock || hasUnlock(def.unlock);
   const renderUnits = () => {
     const filterBar = el("div", "compendium-filter");
     filterBar.appendChild(el("label", "", "シナジーで絞り込み"));
@@ -564,12 +620,12 @@ export function showCompendium(initialTab: CompendiumTab = "units") {
     const filteredUnits = (unitTraitFilter === "all"
       ? [...UNITS]
       : UNITS.filter(
-          (def) => (!def.unlock || hasUnlock(def.unlock)) && def.traits.includes(unitTraitFilter as TraitId),
+          (def) => unitKnown(def) && def.traits.includes(unitTraitFilter as TraitId),
         )).sort((a, b) => a.cost - b.cost || a.name.localeCompare(b.name, "ja"));
     filterBar.appendChild(el("span", "filter-count", `${filteredUnits.length}体`));
     body.appendChild(filterBar);
-    const unlockedUnits = filteredUnits.filter((def) => !def.unlock || hasUnlock(def.unlock));
-    const lockedUnits = filteredUnits.filter((def) => def.unlock && !hasUnlock(def.unlock));
+    const unlockedUnits = filteredUnits.filter(unitKnown);
+    const lockedUnits = filteredUnits.filter((def) => !unitKnown(def));
     for (const cost of [1, 2, 3, 4, 5] as const) {
       const costUnits = unlockedUnits.filter((def) => def.cost === cost);
       if (costUnits.length === 0) continue;
@@ -583,7 +639,7 @@ export function showCompendium(initialTab: CompendiumTab = "units") {
       section.appendChild(heading);
       const grid = el("div", "compendium-grid unit-compendium-grid");
       for (const def of costUnits) {
-        const unlocked = !def.unlock || hasUnlock(def.unlock);
+        const unlocked = unitKnown(def);
         const card = el("div", `compendium-card unit-entry${unlocked ? "" : " undiscovered"}`);
         if (!unlocked) {
           const legacy = LEGACY_UPGRADES.find((x) => x.id === def.unlock);
@@ -663,6 +719,22 @@ export function showCompendium(initialTab: CompendiumTab = "units") {
       body.appendChild(grid);
     }
   };
+  const renderRelics = (ancient: boolean) => {
+    const list = ancient ? ANCIENT_RELICS : RELICS;
+    const discovered = new Set(ancient ? meta().discoveredAncientRelics : meta().discoveredRelics);
+    const grid = el("div", "compendium-grid relic-compendium-grid");
+    for (const relic of list) {
+      const known = LOCAL_COMPENDIUM_DEBUG || discovered.has(relic.id);
+      const card = el("div", `compendium-card relic-entry${known ? "" : " undiscovered"}`);
+      if (known) {
+        card.innerHTML = `<span class="compendium-icon">${relic.icon}</span><b>${relic.name}</b><small>${relic.desc}</small>`;
+      } else {
+        card.innerHTML = `<span class="compendium-icon">❔</span><b>未発見</b><small>冒険中に遭遇すると詳細が記録される</small>`;
+      }
+      grid.appendChild(card);
+    }
+    body.appendChild(grid);
+  };
   const refresh = () => {
     tabs.innerHTML = "";
     body.innerHTML = "";
@@ -670,12 +742,15 @@ export function showCompendium(initialTab: CompendiumTab = "units") {
       { id: "units" as const, label: `⚔️ ユニット ${UNITS.length}` },
       { id: "traits" as const, label: `🔗 シナジー ${Object.keys(TRAITS).length}` },
       { id: "items" as const, label: `🎒 アイテム ${ITEMS.length}` },
+      { id: "relics" as const, label: `🏺 レリック ${RELICS.length}` },
+      { id: "ancientRelics" as const, label: `✨ 古代レリック ${ANCIENT_RELICS.length}` },
     ]) {
       tabs.appendChild(btn(tab.label, active === tab.id ? "active" : "", () => { active = tab.id; refresh(); }));
     }
     if (active === "units") renderUnits();
     else if (active === "traits") renderTraits();
-    else renderItems();
+    else if (active === "items") renderItems();
+    else renderRelics(active === "ancientRelics");
     body.scrollTop = 0;
   };
   const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
@@ -794,10 +869,11 @@ export function renderTitle(): HTMLElement {
     goal.innerHTML = `<small>次の記憶</small><b>${nextLegacy.icon} ${nextLegacy.name}</b><span>${nextLegacy.desc}</span><em>${remaining === 0 ? "解放できます" : `あと 🔹${remaining}`}</em>`;
     hero.appendChild(goal);
   }
-  const compendiumButton = btn("📚 図鑑", "title-compendium", () => showCompendium());
-  s.appendChild(compendiumButton);
-
   const save = loadGame();
+  if (save) {
+    discoverRelics(save.run.relics);
+    discoverAncientRelics([...save.run.ancientRelics, ...save.run.pendingAncientChoices]);
+  }
   const actions = el("div", "title-actions");
   const playRow = el("div", "toolbar title-action-row");
   if (save) {
@@ -823,17 +899,19 @@ export function renderTitle(): HTMLElement {
   } else {
     playRow.appendChild(btn("ランを開始", "primary", () => go({ kind: "starter" })));
   }
-  const sanctuaryRow = el("div", "toolbar title-action-row");
+  const compendiumRow = el("div", "toolbar title-action-row title-single-row");
+  compendiumRow.appendChild(btn("📚 図鑑", "", () => showCompendium()));
+  const sanctuaryRow = el("div", "toolbar title-action-row title-single-row");
   sanctuaryRow.appendChild(btn("🔮 記憶の祭壇", "", () => showLegacySanctum()));
-  sanctuaryRow.appendChild(btn("🎓 チュートリアル", "", () => showTutorial()));
-  const infoRow = el("div", "toolbar title-action-row");
+  const infoRow = el("div", "toolbar title-action-row title-info-row");
+  infoRow.appendChild(btn("🎓 チュートリアル", "", () => showTutorial()));
   infoRow.appendChild(btn("📖 遊び方", "", () => showHelp()));
   infoRow.appendChild(
     btn("💬 感想を送る", "", () => {
       window.open(FEEDBACK_FORM_URL, "_blank", "noopener,noreferrer");
     }),
   );
-  actions.append(playRow, sanctuaryRow, infoRow);
+  actions.append(playRow, compendiumRow, sanctuaryRow, infoRow);
   menu.append(el("h2", "", save ? "冒険を再開" : "新しい冒険"), actions);
 
   const titleSettings = el("section", "title-settings-panel");
@@ -860,10 +938,10 @@ export function renderTitle(): HTMLElement {
   s.appendChild(layout);
   const bgmCredit = el("div", "title-bgm-credit");
   bgmCredit.append("BGM: DOVA-SYNDROME ", Object.assign(document.createElement("a"), {
-    href: "https://dova-s.jp/bgm/detail/23161/",
+    href: "https://dova-s.jp/bgm/detail/4596",
     target: "_blank",
     rel: "noopener noreferrer",
-    textContent: "「春の訪れ」by えだまめ88",
+    textContent: "「流るる時」by siroimu",
   }));
   s.appendChild(bgmCredit);
   return s;
@@ -1043,6 +1121,7 @@ function showRelicPick(s: HTMLElement) {
     go({ kind: "map" });
     return;
   }
+  discoverRelics(choices.map((relic) => relic.id));
   s.innerHTML = "";
   s.appendChild(el("h2", "", "🏺 始まりの遺物"));
   s.appendChild(el("div", "sub", "旅立ちに1つ、レリックを持っていける："));
@@ -1171,7 +1250,7 @@ export function renderPrepare(node: MapNode): HTMLElement {
   const s = el("div");
   s.appendChild(hud(run));
   const area = el("div", "board-area");
-  const boardHolder = el("div");
+  const boardHolder = el("div", "prepare-board-column");
   const side = el("div", "side-panel");
   area.append(boardHolder, side);
   s.appendChild(area);
@@ -1349,6 +1428,10 @@ export function renderPrepare(node: MapNode): HTMLElement {
   function refresh() {
     boardHolder.innerHTML = "";
     side.innerHTML = "";
+
+    const compendium = btn("📚 図鑑", "prepare-compendium-btn", () => showCompendium());
+    compendium.title = "ユニット・シナジー・アイテム図鑑";
+    boardHolder.appendChild(compendium);
 
     const { wrap } = makeBoard();
 
@@ -1840,13 +1923,71 @@ export function renderBattle(node: MapNode): HTMLElement {
     const b = cellCenter(toX, toY);
     p.style.left = b.left;
     p.style.top = b.top;
-    setTimeout(() => spawnFx(`impact ${fx}`, toX, toY, 400), 220);
+    setTimeout(() => {
+      spawnFx(`impact ${fx}`, toX, toY, 450);
+      spawnFx(`impact-ring ${fx}`, toX, toY, 520);
+      if (!gameSettings().reducedEffects) {
+        for (let i = 0; i < 5; i++) {
+          const spark = spawnFx(`impact-spark ${fx}`, toX, toY, 520);
+          spark.style.setProperty("--sx", `${(Math.random() - 0.5) * 72}px`);
+          spark.style.setProperty("--sy", `${(Math.random() - 0.5) * 72}px`);
+        }
+      }
+    }, 220);
+  }
+
+  /** スキル発動者の足元に溜めの魔法陣と放射粒子を出す。 */
+  function spawnCastAura(cu: CombatUnit) {
+    const fx = cu.skill?.fx ?? (cu.skill?.scaling === "attack" ? "phys" : "holy");
+    spawnFx(`cast-aura ${fx}`, cu.x, cu.y, 620);
+    spawnFx(`cast-core ${fx}`, cu.x, cu.y, 480);
+    if (gameSettings().reducedEffects) return;
+    for (let i = 0; i < 6; i++) {
+      const mote = spawnFx(`cast-mote ${fx}`, cu.x, cu.y, 650);
+      const angle = (Math.PI * 2 * i) / 6;
+      mote.style.setProperty("--mx", `${Math.cos(angle) * 42}px`);
+      mote.style.setProperty("--my", `${Math.sin(angle) * 42}px`);
+      mote.style.animationDelay = `${i * 30}ms`;
+    }
+  }
+
+  /** 3コスト以上の固有技。色だけでなく形と動きもスキル系統ごとに変える。 */
+  function spawnSignatureFx(cu: CombatUnit) {
+    if (cu.cost < 3 || !cu.skill) return;
+    const name = cu.skill.name;
+    const groups: Array<[string, string, string[]]> = [
+      ["fire", "🔥", ["星落とし", "火山核", "終末火山", "灰より還る", "狐火輪舞"]],
+      ["storm", "⚡", ["雷門", "風雷環", "超電導嵐", "照準砲列", "必中未来落星"]],
+      ["holy", "✦", ["聖域展開", "未来の選定", "救済の翼", "世界樹の芽吹き", "英霊降下", "双星霊薬", "星血均衡", "魂の万能薬"]],
+      ["blade", "✕", ["竜槍滑空", "六道斬", "影縫い", "猛進再突撃", "一閃・無明", "断層隆起", "装甲強奪突撃", "紅月断", "追奏短剣・狂詩曲"]],
+      ["time", "◷", ["氷河宮殿", "時代逆行", "三秒前の残響", "事象の地平線", "因果固定の錨", "重圧圧縮命令", "奈落重力胞子"]],
+      ["blood", "◆", ["冥府の契約", "貪欲な偽装", "血盟の不落旗", "戦肉捕食", "紅い夜", "巡る血月障壁"]],
+      ["resonance", "♫", ["反響する静寂", "魔力の再編曲", "三響の星鐘", "星なき夜", "戦利品散布"]],
+      ["mirror", "◇", ["生ける贋作", "同胞完全擬態", "双貌の大勝負", "運命反転", "三つの災い顔", "運命の六面体"]],
+    ];
+    const match = groups.find(([, , names]) => names.includes(name));
+    const kind = match?.[0] ?? "void";
+    const glyph = match?.[1] ?? "✧";
+    const stage = spawnFx(`signature-stage signature-${kind}`, cu.x, cu.y, gameSettings().reducedEffects ? 480 : 900);
+    stage.append(el("i", "signature-ring ring-one"), el("i", "signature-ring ring-two"), el("b", "signature-glyph", glyph));
+    if (!gameSettings().reducedEffects) {
+      for (let i = 0; i < 8; i++) {
+        const particle = el("span", "signature-particle");
+        particle.style.setProperty("--angle", `${i * 45}deg`);
+        particle.style.animationDelay = `${i * 35}ms`;
+        stage.appendChild(particle);
+      }
+    }
   }
 
   /** 着弾爆発 + 広がる衝撃波の円（+氷は雪の結晶） */
   function spawnBlastWave(x: number, y: number, kind: "fire" | "frost" | "phys" | "shadow" | "bolt") {
     spawnFx(`aoe-blast ${kind}`, x, y, 500);
     spawnFx(`shockwave ${kind}`, x, y, 650);
+    if (!gameSettings().reducedEffects) {
+      const echo = spawnFx(`shockwave shockwave-echo ${kind}`, x, y, 850);
+      echo.style.animationDelay = "110ms";
+    }
     if (kind === "frost") {
       for (let i = 0; i < 5; i++) {
         const flake = spawnFx("snowflake", x, y, 900);
@@ -1890,7 +2031,7 @@ export function renderBattle(node: MapNode): HTMLElement {
       case "cast": {
         const cu = unitByUid.get(ev.uid);
         const e = unitEls.get(ev.uid);
-        if (e && cu?.alive) replay(e.root, "casting");
+        if (e && cu?.alive) { replay(e.root, "casting"); spawnCastAura(cu); spawnSignatureFx(cu); }
         sfx.cast();
         break;
       }
@@ -1920,6 +2061,10 @@ export function renderBattle(node: MapNode): HTMLElement {
       }
       case "slash": {
         spawnFx("slash-fx", ev.x, ev.y, 300);
+        if (!gameSettings().reducedEffects) {
+          const second = spawnFx("slash-fx slash-fx-second", ev.x, ev.y, 380);
+          second.style.animationDelay = "70ms";
+        }
         break;
       }
       case "buff": {
@@ -1977,9 +2122,12 @@ export function renderBattle(node: MapNode): HTMLElement {
     if (res === "win" && battle.bonusGold > 0) run.gold += battle.bonusGold;
     if (res === "win") {
       run.battleCount++;
+      if (run.relics.includes("victoryPurse") && run.battleCount % 3 === 0) run.gold += 8;
+      const magnetGain = run.relics.includes("salvageMagnet") && battle.hasSurvivingEquippedAlly ? 0.08 : 0;
       bumpCounter("battleWins");
       if (node.type === "elite") bumpCounter("eliteWins");
       if (node.type === "boss") {
+        run.relicItemDropBonus = Math.min(0.24, run.relicItemDropBonus + magnetGain);
         if (run.act >= 3) {
           go({ kind: "gameover", win: true });
         } else {
@@ -1994,6 +2142,7 @@ export function renderBattle(node: MapNode): HTMLElement {
         run.playerHp = Math.min(run.playerMaxHp, run.playerHp + 3);
       }
       go({ kind: "result", node, win: true, hpLost: 0 });
+      run.relicItemDropBonus = Math.min(0.24, run.relicItemDropBonus + magnetGain);
     } else {
       let hpLost =
         5 +
@@ -2037,10 +2186,12 @@ function buildResult(node: MapNode, win: boolean, hpLost: number): HTMLElement {
   const run = ctx.run!;
   const s = el("div", "center-screen");
   const battleReport = () => {
-    const wrap = el("details", "battle-report");
+    const wrap = el("section", "battle-report");
     const allies = ctx.lastBattleReport.filter((row) => row.side === "ally").sort((a, b) => b.damageDealt - a.damageDealt);
     const totalDamage = Math.max(1, allies.reduce((sum, row) => sum + row.damageDealt, 0));
-    wrap.appendChild(el("summary", "", "📊 戦闘レポートを見る"));
+    const title = el("div", "battle-report-title");
+    title.append(el("b", "", "📊 戦闘レポート"), el("small", "", `味方合計ダメージ ${allies.reduce((sum, row) => sum + row.damageDealt, 0).toLocaleString()}`));
+    wrap.appendChild(title);
     const table = el("div", "report-table");
     const head = el("div", "report-head");
     head.append(
@@ -2072,24 +2223,25 @@ function buildResult(node: MapNode, win: boolean, hpLost: number): HTMLElement {
       s.appendChild(
         el("div", "sub", "手負いの君の前に、戦場を漁る闇商人が現れた。\n体勢を立て直してから再挑戦しよう。"),
       );
-      s.appendChild(battleReport());
       s.appendChild(btn("🛒 闇商人のもとへ駆け込む", "primary", () => go({ kind: "shop", node, rescue: true })));
-    } else {
       s.appendChild(battleReport());
+    } else {
       s.appendChild(btn("マップへ戻る", "primary", () => go({ kind: "map" })));
+      s.appendChild(battleReport());
     }
     return s;
   }
 
   s.appendChild(el("h2", "", "🎉 勝利！"));
-  s.appendChild(battleReport());
 
   // アイテムドロップ（エリートは確定、通常戦闘は30%+補正）
   const dropChance =
     0.3 +
+    run.relicItemDropBonus +
     ascMods(run.asc).itemDropPct / 100 +
     (ACT_RULE_BY_ID.get(run.actRule)?.e.itemDropPct ?? 0) / 100 +
     (run.relics.includes("anvil") ? 0.15 : 0);
+  run.relicItemDropBonus = 0;
   if (node.type === "elite" || Math.random() < dropChance) {
     const itemId = rollItem();
     run.items.push(itemId);
@@ -2105,8 +2257,10 @@ function buildResult(node: MapNode, win: boolean, hpLost: number): HTMLElement {
       run.gold += 10;
       s.appendChild(el("div", "sub", "レリックはすべて集めた！代わりに +10G"));
       s.appendChild(btn("マップへ戻る", "primary", () => go({ kind: "map" })));
+      s.appendChild(battleReport());
       return s;
     }
+    discoverRelics(relics.map((relic) => relic.id));
     const row = el("div", "card-row");
     for (const r of relics) {
       const card = el("button", "option-card");
@@ -2122,6 +2276,7 @@ function buildResult(node: MapNode, win: boolean, hpLost: number): HTMLElement {
       run.gold += 4;
       go({ kind: "map" });
     }));
+    s.appendChild(battleReport());
     return s;
   }
 
@@ -2136,7 +2291,7 @@ function buildResult(node: MapNode, win: boolean, hpLost: number): HTMLElement {
   for (const def of choices) {
     row.appendChild(unitCard(def, `仲間にする`, () => {
       if (!addUnit(run, def)) {
-        msg.textContent = "⚠️ ベンチが一杯！先にユニットを売却しよう（配置画面で売却できる）";
+        showRewardBenchSale(def, () => go({ kind: "map" }));
         return;
       }
       go({ kind: "map" });
@@ -2148,6 +2303,7 @@ function buildResult(node: MapNode, win: boolean, hpLost: number): HTMLElement {
     run.gold += 2;
     go({ kind: "map" });
   }));
+  s.appendChild(battleReport());
   return s;
 }
 
@@ -2176,9 +2332,9 @@ export function renderShop(node: MapNode, rescue = false): HTMLElement {
   const markup =
     ascMods(run.asc).shopMarkup + (ACT_RULE_BY_ID.get(run.actRule)?.e.shopMarkup ?? 0);
   const unitPrice = (def: UnitDef) => (rescue ? def.cost * 2 : def.cost) + markup;
-  const itemPrice = (rescue ? 9 : 5) + markup;
-  const relicPrice = (rescue ? 20 : 14) + markup;
-  const rerollPrice = rescue ? 3 : 2;
+  const itemPrice = Math.max(1, (rescue ? 9 : 5) + markup - (run.relics.includes("discountTag") ? 2 : 0));
+  const relicPrice = Math.max(1, (rescue ? 20 : 14) + markup - (run.relics.includes("discountTag") ? 3 : 0));
+  const rerollPrice = Math.max(1, (rescue ? 3 : 2) - (run.relics.includes("luckyCoin") ? 1 : 0));
 
   const s = el("div");
   s.appendChild(hud(run));
@@ -2209,6 +2365,7 @@ export function renderShop(node: MapNode, rescue = false): HTMLElement {
   const relicGuaranteed = rescue || (ACT_RULE_BY_ID.get(run.actRule)?.e.shopRelic ?? false);
   let relicOffer: string | null =
     relicGuaranteed || Math.random() < 0.35 ? (rollRelicChoices(run.relics, 1)[0]?.id ?? null) : null;
+  if (relicOffer) discoverRelics([relicOffer]);
   const row = el("div", "card-row compact");
   const goodsRow = el("div", "card-row");
   const bar = el("div", "toolbar");
@@ -2233,13 +2390,13 @@ export function renderShop(node: MapNode, rescue = false): HTMLElement {
       card.append(shopIcon, el("b", "", d.name), document.createElement("br"), document.createTextNode(d.desc), document.createElement("br"), el("span", "gold-text", `💰 ${itemPrice}G`));
       card.addEventListener("click", () => {
         if (run.gold < itemPrice) {
-          msg.textContent = "⚠️ ゴールドが足りない！";
+          showAttentionMessage(msg, `⚠️ ゴールドが足りない！ あと ${itemPrice - run.gold}G 必要です`);
           return;
         }
         run.gold -= itemPrice;
         run.items.push(id);
         itemOffers[i] = null;
-        msg.textContent = `${d.name} を購入した！（配置画面で装備しよう）`;
+        showNormalMessage(msg, `${d.name} を購入した！（配置画面で装備しよう）`);
         sfx.coin();
         rerenderAll();
       });
@@ -2251,12 +2408,12 @@ export function renderShop(node: MapNode, rescue = false): HTMLElement {
       card.innerHTML = `<span class="icon">${r.icon}</span><b>${r.name}</b>（レリック）<br>${r.desc}<br><span class="gold-text">💰 ${relicPrice}G</span>`;
       card.addEventListener("click", () => {
         if (run.gold < relicPrice) {
-          msg.textContent = "⚠️ ゴールドが足りない！";
+          showAttentionMessage(msg, `⚠️ ゴールドが足りない！ あと ${relicPrice - run.gold}G 必要です`);
           return;
         }
         run.gold -= relicPrice;
         run.relics.push(relicOffer!);
-        msg.textContent = `レリック「${r.name}」を手に入れた！`;
+        showNormalMessage(msg, `レリック「${r.name}」を手に入れた！`);
         relicOffer = null;
         sfx.coin();
         rerenderAll();
@@ -2268,16 +2425,16 @@ export function renderShop(node: MapNode, rescue = false): HTMLElement {
       if (!def) continue;
       const card = unitCard(def, "購入", () => {
         if (run.gold < unitPrice(def)) {
-          msg.textContent = "⚠️ ゴールドが足りない！";
+          showAttentionMessage(msg, `⚠️ ゴールドが足りない！ あと ${unitPrice(def) - run.gold}G 必要です`);
           return;
         }
         if (!addUnit(run, def)) {
-          msg.textContent = "⚠️ ベンチが一杯！";
+          showAttentionMessage(msg, "⚠️ ベンチがいっぱいです！ 下の手持ちユニットを売却してください");
           return;
         }
         run.gold -= unitPrice(def);
         offers[i] = null;
-        msg.textContent = `${def.name} を雇入れた！`;
+        showNormalMessage(msg, `${def.name} を雇入れた！`);
         sfx.coin();
         rerenderAll();
       });
@@ -2289,7 +2446,7 @@ export function renderShop(node: MapNode, rescue = false): HTMLElement {
     bar.append(
       btn(`🎲 リロール (${rerollPrice}G)`, "", () => {
         if (run.gold < rerollPrice) {
-          msg.textContent = "⚠️ ゴールドが足りない！";
+          showAttentionMessage(msg, `⚠️ ゴールドが足りない！ あと ${rerollPrice - run.gold}G 必要です`);
           return;
         }
         run.gold -= rerollPrice;
@@ -2299,7 +2456,7 @@ export function renderShop(node: MapNode, rescue = false): HTMLElement {
       ...(itemRerollMax > 0
         ? [btn(`🔄 アイテム更新（残り${run.shopItemRerolls}回）`, "", () => {
             if (run.shopItemRerolls <= 0) {
-              msg.textContent = "⚠️ このショップでのアイテム更新は使い切った";
+              showAttentionMessage(msg, "⚠️ このショップでのアイテム更新は使い切りました");
               return;
             }
             run.shopItemRerolls--;
@@ -2379,12 +2536,13 @@ export function renderRest(_node: MapNode): HTMLElement {
   let healAmt = 18;
   if (ascMods(run.asc).restHalf) healAmt = Math.floor(healAmt / 2);
   healAmt = Math.round(healAmt * (ACT_RULE_BY_ID.get(run.actRule)?.e.restMult ?? 1));
+  if (run.relics.includes("campKit")) healAmt += 5;
 
   const row = el("div", "card-row");
   const heal = el("button", "option-card");
-  heal.innerHTML = `<span class="icon">💤</span><b>休息する</b><br>HPを ${healAmt} 回復する`;
+  heal.innerHTML = `<span class="icon">💤</span><b>休息する</b><br>HPを ${healAmt} 回復する${run.relics.includes("campKit") ? "<br>野営道具: 最大HP +1" : ""}`;
   const train = el("button", "option-card");
-  train.innerHTML = `<span class="icon">🏋️</span><b>特訓する</b><br>手持ちのランダムなユニットの複製を1体得る（星アップの近道）`;
+  train.innerHTML = `<span class="icon">🏋️</span><b>特訓する</b><br>手持ちのランダムなユニットの複製を1体得る（星アップの近道）${run.relics.includes("campKit") ? "<br>野営道具: 最大HP +1" : ""}`;
 
   function done(text: string) {
     center.innerHTML = "";
@@ -2395,11 +2553,13 @@ export function renderRest(_node: MapNode): HTMLElement {
   }
 
   heal.addEventListener("click", () => {
+    if (run.relics.includes("campKit")) { run.playerMaxHp += 1; run.playerHp += 1; }
     const amount = Math.min(healAmt, run.playerMaxHp - run.playerHp);
     run.playerHp += amount;
     done(`ぐっすり眠った。HPが ${amount} 回復した！`);
   });
   train.addEventListener("click", () => {
+    if (run.relics.includes("campKit")) { run.playerMaxHp += 1; run.playerHp += 1; }
     // ★3は複製しても無駄なので対象から除外
     const pool = run.roster.filter((u) => u.star < 3);
     if (pool.length === 0) {
@@ -2539,6 +2699,7 @@ const EVENTS: GameEvent[] = [
             return "祭壇は沈黙している…足元に金貨が落ちていた (+15G)";
           }
           run.relics.push(c.id);
+          discoverRelics([c.id]);
           return `${c.icon} レリック「${c.name}」を授かった！（${c.desc}）`;
         },
       },
@@ -2624,6 +2785,7 @@ export function renderActClear(clearedAct: number): HTMLElement {
         run.pendingAncientChoices = rollAncientRelicChoices(run.ancientRelics, 3).map((r) => r.id);
         persist();
       }
+      discoverAncientRelics(run.pendingAncientChoices);
       s.appendChild(el("h3", "ancient-heading", "✨ エンシェントレリックを1つ選ぼう"));
       s.appendChild(el("div", "sub", "通常のレリックを超える、強力で特殊な遺物。選択はラン終了まで変更できない。"));
       const row = el("div", "card-row ancient-choice-row");

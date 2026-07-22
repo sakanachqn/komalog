@@ -14,6 +14,9 @@ export interface MetaData {
   memoryShards: number;
   /** 記憶の祭壇で購入済みの恒久強化 */
   legacyUnlocks: string[];
+  /** 図鑑で詳細を開示する、一度でも提示・入手した遺物。 */
+  discoveredRelics: string[];
+  discoveredAncientRelics: string[];
   records: {
     totalWins: number;
     bestClearMs: number | null;
@@ -33,6 +36,8 @@ function defaults(): MetaData {
     unlocks: [],
     memoryShards: 0,
     legacyUnlocks: [],
+    discoveredRelics: [],
+    discoveredAncientRelics: [],
     records: { totalWins: 0, bestClearMs: null, bestBattleWins: 0, ascBest: -1 },
   };
 }
@@ -116,6 +121,21 @@ export function saveMeta() {
     /* noop */
   }
 }
+
+function addDiscoveries(key: "discoveredRelics" | "discoveredAncientRelics", ids: string[]): void {
+  if (ids.length === 0) return;
+  const m = meta();
+  let changed = false;
+  for (const id of ids) {
+    if (m[key].includes(id)) continue;
+    m[key].push(id);
+    changed = true;
+  }
+  if (changed) saveMeta();
+}
+
+export function discoverRelics(ids: string[]): void { addDiscoveries("discoveredRelics", ids); }
+export function discoverAncientRelics(ids: string[]): void { addDiscoveries("discoveredAncientRelics", ids); }
 
 /** 実績の定義: 条件の説明と解放される報酬名 */
 export const UNLOCK_INFO: Record<string, { cond: string; reward: string }> = {

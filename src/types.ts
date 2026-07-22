@@ -167,6 +167,8 @@ export interface RunState {
   potions: string[];
   /** 解体屋の累積スクラップ */
   scrap: number;
+  /** 回収者の磁石で次戦へ持ち越すアイテムドロップ率補正（0〜0.24） */
+  relicItemDropBonus: number;
   /** 未装備アイテムIDの在庫 */
   items: string[];
 }
