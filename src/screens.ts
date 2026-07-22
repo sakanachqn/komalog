@@ -322,6 +322,7 @@ function hud(run: RunState, onAbandon?: () => void): HTMLElement {
     for (const id of run.relics) {
       const d = RELIC_BY_ID.get(id)!;
       const icon = el("span", "relic-icon", d.icon);
+      icon.dataset.relicTooltip = d.id;
       icon.title = `${d.name}: ${d.desc}`;
       row.appendChild(icon);
     }
@@ -333,6 +334,7 @@ function hud(run: RunState, onAbandon?: () => void): HTMLElement {
       const d = ANCIENT_RELIC_BY_ID.get(id);
       if (!d) continue;
       const icon = el("span", "relic-icon ancient-relic-icon", d.icon);
+      icon.dataset.ancientRelicTooltip = d.id;
       icon.title = `エンシェントレリック「${d.name}」: ${d.desc}`;
       row.appendChild(icon);
     }
@@ -546,6 +548,21 @@ const HELP_HTML = `
   <h4>💰 ゴールドの使い道</h4>
   <p>ショップでユニット（コスト分のG）、アイテム、レリックを買える。リロールで品揃えを引き直すことも可能。
   いらないユニットは<b>売却</b>してゴールドに戻せる（星が高いほど高値）。</p>
+</section>
+<section>
+  <h4>📊 ユニットのステータス</h4>
+  <ul>
+    <li><b>HP</b> … 受けられるダメージ量。0になると戦闘不能になる</li>
+    <li><b>攻撃力</b> … 通常攻撃と、説明に「攻撃力参照」とあるスキルの威力に影響する</li>
+    <li><b>呪文威力</b> … 「呪文威力参照」のスキルによるダメージ・回復・シールド量を強化する</li>
+    <li><b>攻撃速度</b> … 1秒間に行う通常攻撃の回数。高いほど攻撃とマナ獲得が速い</li>
+    <li><b>クリティカル率</b> … 通常攻撃がクリティカルになる確率</li>
+    <li><b>クリティカルダメージ</b> … クリティカル発生時に与えるダメージ倍率</li>
+    <li><b>射程</b> … 攻撃可能な距離。近距離(1)・中距離(2)・遠距離(3以上)で表示される</li>
+    <li><b>防御</b> … 物理ダメージを軽減する。高いほど物理攻撃に強い</li>
+    <li><b>開始マナ</b> … 戦闘開始時点で所持しているマナ。必要マナまで溜まるとスキルを使用する</li>
+  </ul>
+  <p>ユニットを選択するか、ショップ・報酬などのユニットへカーソルを合わせると詳細を確認できる。</p>
 </section>
 <section>
   <h4>🛡️ シールドとマナ</h4>

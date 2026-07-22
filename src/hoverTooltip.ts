@@ -1,4 +1,5 @@
-import { CRAFT_RECIPES, ITEM_BY_ID } from "./data/relics";
+import { CRAFT_RECIPES, ITEM_BY_ID, RELIC_BY_ID } from "./data/relics";
+import { ANCIENT_RELIC_BY_ID } from "./data/ancientRelics";
 import { TRAITS, UNIT_BY_ID } from "./data/units";
 import type { EnemyDef, TraitId } from "./types";
 
@@ -38,6 +39,20 @@ function tooltipHtml(target: HTMLElement): string | null {
     const isResult = Object.values(CRAFT_RECIPES).includes(item.id);
     const category = isMaterial && isResult ? "合成素材・合成品" : isMaterial ? "合成素材" : isResult ? "合成アイテム" : "アイテム";
     return `<b>${item.icon} ${item.name}</b><div class="hover-item-kind">${category}</div><div class="hover-skill"><small>効果</small><p>${item.desc}</p></div>`;
+  }
+
+  const ancientTarget = target.closest<HTMLElement>("[data-ancient-relic-tooltip]");
+  if (ancientTarget) {
+    const relic = ANCIENT_RELIC_BY_ID.get(ancientTarget.dataset.ancientRelicTooltip!);
+    if (!relic) return null;
+    return `<b>${relic.icon} ${relic.name}</b><div class="hover-item-kind ancient">エンシェントレリック</div><div class="hover-skill"><small>効果</small><p>${relic.desc}</p></div>`;
+  }
+
+  const relicTarget = target.closest<HTMLElement>("[data-relic-tooltip]");
+  if (relicTarget) {
+    const relic = RELIC_BY_ID.get(relicTarget.dataset.relicTooltip!);
+    if (!relic) return null;
+    return `<b>${relic.icon} ${relic.name}</b><div class="hover-item-kind relic">レリック</div><div class="hover-skill"><small>効果</small><p>${relic.desc}</p></div>`;
   }
 
   const traitTarget = target.closest<HTMLElement>("[data-trait-tooltip]");
@@ -90,7 +105,7 @@ export function initHoverTooltips(): void {
   document.addEventListener("pointerout", (event) => {
     if (!(event.target instanceof HTMLElement)) return;
     const related = event.relatedTarget instanceof HTMLElement ? event.relatedTarget : null;
-    const source = event.target.closest("[data-unit-tooltip], [data-item-tooltip], [data-trait-tooltip], [data-hover-name]");
+    const source = event.target.closest("[data-unit-tooltip], [data-item-tooltip], [data-relic-tooltip], [data-ancient-relic-tooltip], [data-trait-tooltip], [data-hover-name]");
     if (source && (!related || !source.contains(related))) tip.classList.remove("visible");
   });
 }
