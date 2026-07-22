@@ -158,6 +158,8 @@ export interface RunState {
   pendingAncientChoices: string[];
   /** ボス撃破後のエンシェント報酬を受け取った幕 */
   ancientRewardActs: number[];
+  /** エンシェントレリック候補のリロールを使用済みの幕 */
+  ancientRerollUsedActs?: number[];
   /** 次のショップへ取り置かれたアイテム候補 */
   carriedShopItems: string[];
   /** 現在のショップで残っている無料アイテム更新回数 */

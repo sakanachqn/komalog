@@ -995,10 +995,24 @@ function showLastRunRecord(): void {
     const box = el("div"); box.appendChild(el("h3", "", title));
     box.appendChild(el("p", "", values.length ? values.join("　") : "なし")); return box;
   };
+  const relicList = (title: string, ids: string[], ancient: boolean) => {
+    const box = el("div"); box.appendChild(el("h3", "", title));
+    const list = el("div", "last-run-relic-list");
+    for (const id of ids) {
+      const relic = ancient ? ANCIENT_RELIC_BY_ID.get(id) : RELIC_BY_ID.get(id);
+      if (!relic) continue;
+      const chip = el("span", ancient ? "ancient" : "", `${relic.icon} ${relic.name}`);
+      if (ancient) chip.dataset.ancientRelicTooltip = id;
+      else chip.dataset.relicTooltip = id;
+      list.appendChild(chip);
+    }
+    if (list.childElementCount === 0) list.appendChild(el("span", "empty", "なし"));
+    box.appendChild(list); return box;
+  };
   summarySection.append(
     summaryList("発動シナジー", record.traits.map((trait) => { const info = TRAITS[trait.id as TraitId]; return info ? `${info.icon}${info.name} Lv${trait.tier}` : trait.id; })),
-    summaryList("レリック", record.relics.map((id) => { const relic = RELIC_BY_ID.get(id); return relic ? `${relic.icon}${relic.name}` : id; })),
-    summaryList("古代レリック", record.ancientRelics.map((id) => { const relic = ANCIENT_RELIC_BY_ID.get(id); return relic ? `${relic.icon}${relic.name}` : id; })),
+    relicList("レリック", record.relics, false),
+    relicList("古代レリック", record.ancientRelics, true),
   );
   body.appendChild(summarySection);
   const foot = el("div", "toolbar"); foot.appendChild(btn("閉じる", "primary", () => close()));
@@ -1075,6 +1089,32 @@ export function renderTitle(): HTMLElement {
     discoverRelics(save.run.relics);
     discoverAncientRelics([...save.run.ancientRelics, ...save.run.pendingAncientChoices]);
   }
+  selectedAscension = Math.min(selectedAscension ?? m.ascUnlocked, m.ascUnlocked, MAX_ASC);
+  const titleAsc = el("div", "title-asc-selector");
+  const ascLabel = el("b", "", "");
+  const ascSummary = el("small", "", "");
+  const ascDown = btn("−", "asc-btn", () => {
+    selectedAscension = Math.max(0, (selectedAscension ?? 0) - 1);
+    refreshTitleAsc();
+  });
+  const ascUp = btn("＋", "asc-btn", () => {
+    selectedAscension = Math.min(m.ascUnlocked, (selectedAscension ?? 0) + 1);
+    refreshTitleAsc();
+  });
+  const refreshTitleAsc = () => {
+    const level = selectedAscension ?? 0;
+    ascLabel.textContent = `🔥 挑戦段位 ${level} / ${m.ascUnlocked}`;
+    if (level === 0) ascSummary.textContent = "補正なし（標準難易度）";
+    else {
+      const effect = ASC_LEVELS[level - 1];
+      ascSummary.textContent = `Lv${level}追加：▼ ${effect.debuff}　▲ ${effect.buff}`;
+    }
+    ascDown.disabled = level <= 0;
+    ascUp.disabled = level >= m.ascUnlocked;
+  };
+  titleAsc.append(ascDown, el("span", "title-asc-copy"), ascUp);
+  titleAsc.querySelector(".title-asc-copy")!.append(ascLabel, ascSummary);
+  refreshTitleAsc();
   const actions = el("div", "title-actions");
   const playRow = el("div", "toolbar title-action-row");
   if (save) {
@@ -1115,7 +1155,7 @@ export function renderTitle(): HTMLElement {
     }),
   );
   actions.append(playRow, compendiumRow, sanctuaryRow, infoRow);
-  menu.append(el("h2", "", save ? "冒険を再開" : "新しい冒険"), actions);
+  menu.append(el("h2", "", save ? "冒険を再開" : "新しい冒険"), titleAsc, actions);
 
   const titleSettings = el("section", "title-settings-panel");
   const settingToggle = (label: string, desc: string, checked: boolean, onChange: (value: boolean) => void) => {
@@ -1202,6 +1242,8 @@ interface Starter {
   random?: boolean;
 }
 
+let selectedAscension: number | null = null;
+
 const STARTERS: Starter[] = [
   {
     name: "鉄壁の布陣",
@@ -1258,43 +1300,8 @@ function rollRandomStarterUnits(): string[] {
 export function renderStarter(): HTMLElement {
   const s = el("div", "center-screen");
   s.appendChild(el("h2", "", "🎴 旅立ちの仲間を選べ"));
-
-  // アセンション段位セレクタ
-  let asc = Math.min(meta().ascUnlocked, MAX_ASC);
-  if (meta().ascUnlocked > 0) {
-    const panel = el("div", "asc-panel");
-    const header = el("div", "asc-header");
-    const levelLabel = el("span", "asc-level", "");
-    const effectList = el("div", "asc-effects");
-    const refreshAsc = () => {
-      levelLabel.textContent = `🔥 挑戦段位 ${asc} / ${meta().ascUnlocked}`;
-      effectList.innerHTML = "";
-      if (asc === 0) {
-        effectList.appendChild(el("div", "asc-row", "補正なし（標準難易度）"));
-      }
-      for (let i = 0; i < asc; i++) {
-        const lv = ASC_LEVELS[i];
-        const row = el("div", `asc-row${lv.milestone ? " milestone" : ""}`);
-        row.innerHTML = `<b>Lv${i + 1}</b>　<span class="asc-debuff">▼ ${lv.debuff}</span>　<span class="asc-buff">▲ ${lv.buff}</span>`;
-        effectList.appendChild(row);
-      }
-      effectList.scrollTop = effectList.scrollHeight;
-    };
-    header.append(
-      btn("−", "asc-btn", () => {
-        asc = Math.max(0, asc - 1);
-        refreshAsc();
-      }),
-      levelLabel,
-      btn("＋", "asc-btn", () => {
-        asc = Math.min(meta().ascUnlocked, asc + 1);
-        refreshAsc();
-      }),
-    );
-    panel.append(header, effectList);
-    refreshAsc();
-    s.appendChild(panel);
-  }
+  const asc = Math.min(selectedAscension ?? meta().ascUnlocked, meta().ascUnlocked, MAX_ASC);
+  s.appendChild(el("div", "starter-asc-label", `🔥 挑戦段位 ${asc}`));
 
   s.appendChild(el("div", "sub", "最初の部隊がビルドの方向性を決める："));
   const unlocked = STARTERS.filter((st) => !st.unlock || hasUnlock(st.unlock));
@@ -1317,12 +1324,9 @@ export function renderStarter(): HTMLElement {
     card.innerHTML = `<span class="icon">${st.icon}</span><b>${st.name}</b><br><span style="opacity:.75">${st.desc}</span><br><br>${unitList}`;
     card.addEventListener("click", () => {
       ctx.run = newRun(st.random ? rollRandomStarterUnits() : st.units, asc);
-      // アセンションLv20「始まりの遺物」: レリックを選んで持ち込む
-      if (ascMods(asc).relicPick) {
-        showRelicPick(s);
-      } else {
-        go({ kind: "map" });
-      }
+      const afterAncient = () => ascMods(asc).relicPick ? showRelicPick(s) : go({ kind: "map" });
+      if (hasLegacy("start_ancient")) showStartAncientPick(s, afterAncient);
+      else afterAncient();
     });
     row.appendChild(card);
   }
@@ -1334,6 +1338,27 @@ export function renderStarter(): HTMLElement {
   }
   s.appendChild(row);
   return s;
+}
+
+function showStartAncientPick(s: HTMLElement, onComplete: () => void): void {
+  const run = ctx.run!;
+  const choices = rollAncientRelicChoices(run.ancientRelics, 3);
+  if (choices.length === 0) { onComplete(); return; }
+  discoverAncientRelics(choices.map((relic) => relic.id));
+  s.innerHTML = "";
+  s.append(el("h2", "", "✨ 太古の継承"), el("div", "sub", "旅立ちに持ち込むエンシェントレリックを1つ選ぼう："));
+  const row = el("div", "card-row ancient-choice-row");
+  for (const relic of choices) {
+    const card = el("button", "option-card ancient-card");
+    card.innerHTML = `<span class="icon">${relic.icon}</span><b>${relic.name}</b><br><span>${relic.desc}</span>`;
+    card.addEventListener("click", () => {
+      run.ancientRelics.push(relic.id);
+      sfx.craft();
+      onComplete();
+    });
+    row.appendChild(card);
+  }
+  s.appendChild(row);
 }
 
 /** アセンションLv20: 開始時レリック3択（スターター画面を差し替えて表示） */
@@ -2565,25 +2590,40 @@ function buildResult(node: MapNode, win: boolean, hpLost: number): HTMLElement {
   s.appendChild(rosterStrip(run));
   const gf = globalFloor(run);
   const maxed = maxedDefIds(run);
-  const rewardChoiceCount = hasLegacy("reward_choice") ? 4 : 3;
-  const choices: UnitDef[] = Array.from({ length: rewardChoiceCount }, () => rollUnitDef(gf, maxed));
+  const rewardChoiceCount = 3 + legacyLevel("reward_choice");
+  let choices: UnitDef[] = Array.from({ length: rewardChoiceCount }, () => rollUnitDef(gf, maxed));
+  let rewardRerolls = hasLegacy("reward_reroll") ? 1 : 0;
   const row = el("div", "card-row");
   const msg = el("div", "sub", "");
-  for (const def of choices) {
-    row.appendChild(unitCard(def, `仲間にする`, () => {
-      if (!addUnit(run, def)) {
-        showRewardBenchSale(def, () => go({ kind: "map" }));
-        return;
-      }
-      go({ kind: "map" });
-    }));
-  }
+  const renderChoices = () => {
+    row.innerHTML = "";
+    for (const def of choices) {
+      row.appendChild(unitCard(def, `仲間にする`, () => {
+        if (!addUnit(run, def)) {
+          showRewardBenchSale(def, () => go({ kind: "map" }));
+          return;
+        }
+        go({ kind: "map" });
+      }));
+    }
+  };
+  renderChoices();
   s.appendChild(row);
   s.appendChild(msg);
-  s.appendChild(btn("スキップ (+2G)", "", () => {
-    run.gold += 2;
-    go({ kind: "map" });
+  const rewardActions = el("div", "toolbar");
+  if (rewardRerolls > 0) rewardActions.appendChild(btn("🎲 候補をリロール（1回）", "", () => {
+    if (rewardRerolls <= 0) return;
+    rewardRerolls--;
+    choices = Array.from({ length: rewardChoiceCount }, () => rollUnitDef(gf, maxed));
+    renderChoices();
+    (rewardActions.firstElementChild as HTMLButtonElement).disabled = true;
+    (rewardActions.firstElementChild as HTMLButtonElement).textContent = "🎲 リロール使用済み";
   }));
+  rewardActions.appendChild(btn("スキップ (+2G)", "", () => {
+      run.gold += 2;
+      go({ kind: "map" });
+    }));
+  s.appendChild(rewardActions);
   s.appendChild(battleReport());
   return s;
 }
@@ -2899,7 +2939,7 @@ export function renderRest(_node: MapNode): HTMLElement {
     const target = pool[Math.floor(Math.random() * pool.length)];
     const def = unitDef(target);
     if (!addUnit(run, def)) {
-      done("ベンチが一杯で複製を受け取れなかった…");
+      showRewardBenchSale(def, () => done(`${def.icon} ${def.name} の複製を獲得した！`));
       return;
     }
     done(`${def.icon} ${def.name} の複製を獲得した！`);
@@ -3139,6 +3179,20 @@ export function renderActClear(clearedAct: number): HTMLElement {
         row.appendChild(card);
       }
       s.appendChild(row);
+      run.ancientRerollUsedActs ??= [];
+      if (hasLegacy("ancient_reroll") && !run.ancientRerollUsedActs.includes(clearedAct)) {
+        s.appendChild(btn("🔮 古代の候補をリロール（1回）", "", () => {
+          const excluded = [...run.ancientRelics, ...run.pendingAncientChoices];
+          const rerolled = rollAncientRelicChoices(excluded, 3).map((relic) => relic.id);
+          if (rerolled.length === 0) return;
+          run.pendingAncientChoices = rerolled;
+          run.ancientRerollUsedActs!.push(clearedAct);
+          discoverAncientRelics(rerolled);
+          persist();
+          sfx.craft();
+          render();
+        }));
+      }
       return;
     }
 
@@ -3255,7 +3309,7 @@ export function renderGameover(win: boolean, abandoned = false): HTMLElement {
   const actions = el("div", "toolbar gameover-actions");
   actions.append(
     btn("🔮 記憶の祭壇へ", nextLegacy && m.memoryShards >= nextLegacy.cost ? "primary" : "", () => showLegacySanctum()),
-    btn("同じ段位でもう一度", "primary", () => go({ kind: "starter" })),
+    btn("同じ段位でもう一度", "primary", () => { selectedAscension = run.asc; go({ kind: "starter" }); }),
     btn("タイトルへ戻る", "", () => go({ kind: "title" })),
   );
   s.appendChild(actions);

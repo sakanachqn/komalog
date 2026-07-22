@@ -1,7 +1,6 @@
 import { ascMods } from "./ascension";
 import { rollActRule } from "./data/actrules";
 import { rollItem, rollRelicChoices } from "./data/relics";
-import { rollAncientRelicChoices } from "./data/ancientRelics";
 import { UNIT_BY_ID } from "./data/units";
 import { generateMap } from "./map";
 import { grantUnlock, hasAchievementMilestone, hasLegacy, legacyLevel, meta, saveMeta } from "./meta";
@@ -54,10 +53,6 @@ export function newRun(starterDefIds: string[], asc = 0): RunState {
     const reward = rollRelicChoices(run.relics, 1)[0];
     if (reward) run.relics.push(reward.id);
   }
-  if (hasLegacy("start_ancient")) {
-    const ancient = rollAncientRelicChoices([], 1)[0];
-    if (ancient) run.ancientRelics.push(ancient.id);
-  }
   // 初期配置
   autoPlace(run);
   run.lastShownTeamCap = teamCap(run);
@@ -76,7 +71,7 @@ export function globalFloor(run: RunState): number {
 export function teamCap(run: RunState): number {
   const base = Math.min(8, 3 + Math.floor(globalFloor(run) / 3));
   const crown = run.relics.includes("crown") ? 1 : 0;
-  const normal = base + crown + ascMods(run.asc).capBonus;
+  const normal = base + crown + ascMods(run.asc).capBonus + legacyLevel("team_cap_");
   return run.ancientRelics.includes("legionPact") ? normal * 2 : normal;
 }
 

@@ -575,6 +575,10 @@ button.primary:hover:not(:disabled) {
 .last-run-unit > .art-icon:last-child { position: absolute; right: -4px; bottom: -4px; width: 17px; height: 17px; }
 .last-run-columns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .last-run-columns p { color: var(--text); font-size: 11px; line-height: 1.65; }
+.last-run-relic-list { display: flex; flex-wrap: wrap; gap: 5px; }
+.last-run-relic-list > span { padding: 3px 6px; color: #e8c877; font-size: 10px; background: rgba(190,145,45,.12); border: 1px solid rgba(220,180,80,.3); border-radius: 6px; cursor: help; }
+.last-run-relic-list > span.ancient { color: #ffd96a; background: rgba(145,90,15,.22); border-color: rgba(255,206,70,.48); }
+.last-run-relic-list > span.empty { color: var(--muted); background: transparent; border: 0; cursor: default; }
 .memory-reward {
   display: flex;
   flex-direction: column;
@@ -704,6 +708,22 @@ button.primary:hover:not(:disabled) {
 .next-goal span { grid-column: 1 / 3; font-size: 13px; }
 .next-goal em { grid-column: 2; grid-row: 1 / 3; align-self: center; color: var(--gold); font-style: normal; font-weight: bold; }
 .title-actions { display: grid; gap: 9px; }
+.title-asc-selector {
+  display: grid;
+  grid-template-columns: 38px 1fr 38px;
+  align-items: center;
+  gap: 8px;
+  margin: -7px 0 14px;
+  padding: 9px 10px;
+  background: rgba(20,18,30,.4);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.title-asc-selector .asc-btn { min-width: 0; padding: 5px; }
+.title-asc-copy { display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; }
+.title-asc-copy b { color: var(--gold); font-size: 13px; }
+.title-asc-copy small { max-width: 100%; overflow: hidden; color: var(--muted); font-size: 9px; white-space: nowrap; text-overflow: ellipsis; }
+.starter-asc-label { margin-top: -9px; padding: 5px 12px; color: var(--gold); font-size: 12px; font-weight: 800; background: rgba(240,192,96,.08); border: 1px solid rgba(240,192,96,.3); border-radius: 999px; }
 .title-action-row { margin: 0; justify-content: center; }
 .title-action-row:first-child { flex-wrap: nowrap; }
 .title-menu .title-action-row .title-continue { flex: 1.45; min-width: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; white-space: nowrap; }
