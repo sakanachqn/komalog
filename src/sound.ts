@@ -1,3 +1,5 @@
+import { gameSettings } from "./settings";
+
 /** WebAudioで合成する軽量効果音。音源ファイル不要。
  *  耳に刺さらないよう、サイン/三角波＋ソフトアタック＋マスターローパスで丸い音にしている。 */
 
@@ -197,4 +199,3 @@ export function initUiButtonSounds(): void {
     sfx.ui(cancelLike ? "cancel" : confirmLike ? "confirm" : "tap");
   });
 }
-import { gameSettings } from "./settings";

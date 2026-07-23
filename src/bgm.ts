@@ -1,75 +1,178 @@
 import { isMuted } from "./sound";
 import { gameSettings } from "./settings";
 
-const BGM_PATH = `${import.meta.env.BASE_URL}assets/bgm.mp3`;
-const LOOP_FADE_SECONDS = 1.6;
-let player: HTMLAudioElement | null = null;
-let started = false;
-let fadeGain = 1;
-let fadePhase: "normal" | "out" | "in" = "normal";
-let fadeInStartedAt = 0;
+export type BgmScene = "title" | "stage1" | "stage2" | "stage3";
 
-function syncVolume(): void {
-  if (!player) return;
-  player.muted = isMuted();
-  player.volume = Math.max(0, Math.min(1, gameSettings().bgmVolume * fadeGain));
+const BGM_PATHS: Record<BgmScene, string> = {
+  title: `${import.meta.env.BASE_URL}assets/bgm-title.mp3`,
+  stage1: `${import.meta.env.BASE_URL}assets/bgm-stage1.mp3`,
+  stage2: `${import.meta.env.BASE_URL}assets/bgm-stage2.mp3`,
+  stage3: `${import.meta.env.BASE_URL}assets/bgm-stage3.mp3`,
+};
+const BGM_START_OFFSETS: Record<BgmScene, number> = {
+  title: 2,
+  stage1: 3,
+  stage2: 0,
+  stage3: 0,
+};
+
+const FADE_SECONDS = 1.6;
+const FADE_MS = FADE_SECONDS * 1000;
+
+interface Track {
+  scene: BgmScene;
+  audio: HTMLAudioElement;
+  gain: number;
+  fromGain: number;
+  targetGain: number;
+  fadeStartedAt: number;
+  loopGain: number;
+  loopFadeInAt: number | null;
+  started: boolean;
 }
 
-function restartWithFadeIn(): void {
-  if (!player) return;
-  player.currentTime = 0;
-  fadePhase = "in";
-  fadeGain = 0;
-  fadeInStartedAt = performance.now();
-  syncVolume();
-  void player.play().catch(() => { started = false; });
+let initialized = false;
+let desiredScene: BgmScene = "title";
+let tracks: Track[] = [];
+
+function syncVolume(track: Track): void {
+  track.audio.muted = isMuted();
+  track.audio.volume = Math.max(0, Math.min(1, gameSettings().bgmVolume * track.gain * track.loopGain));
 }
 
-function updateLoopFade(now: number): void {
-  if (player && started && !player.paused && Number.isFinite(player.duration) && player.duration > 0) {
-    const remaining = player.duration - player.currentTime;
-    if (fadePhase === "normal" && remaining <= LOOP_FADE_SECONDS) fadePhase = "out";
+async function startTrack(track: Track): Promise<void> {
+  if (track.started) return;
+  // オフセット曲はメタデータ取得後にシークし、冒頭が一瞬鳴るのを防ぐ。
+  if (BGM_START_OFFSETS[track.scene] > 0 && track.audio.readyState < HTMLMediaElement.HAVE_METADATA) {
+    track.audio.load();
+    return;
+  }
+  if (track.audio.currentTime < BGM_START_OFFSETS[track.scene]) {
+    track.audio.currentTime = BGM_START_OFFSETS[track.scene];
+  }
+  syncVolume(track);
+  try {
+    await track.audio.play();
+    track.started = true;
+  } catch {
+    // ブラウザの自動再生制限中、または音源がまだ未配置。次の操作で再試行する。
+  }
+}
 
-    if (fadePhase === "out") {
-      fadeGain = Math.max(0, Math.min(1, remaining / LOOP_FADE_SECONDS));
-      syncVolume();
-      // 無音近くまで下がったところで先頭へ戻し、MP3末尾の切れ目を隠す。
-      if (remaining <= 0.06) restartWithFadeIn();
-    } else if (fadePhase === "in") {
-      fadeGain = Math.max(0, Math.min(1, (now - fadeInStartedAt) / (LOOP_FADE_SECONDS * 1000)));
-      syncVolume();
-      if (fadeGain >= 1) fadePhase = "normal";
+function createTrack(scene: BgmScene, initialGain: number): Track {
+  const audio = new Audio(BGM_PATHS[scene]);
+  audio.loop = false;
+  audio.preload = "auto";
+  audio.setAttribute("playsinline", "");
+  const track: Track = {
+    scene,
+    audio,
+    gain: initialGain,
+    fromGain: initialGain,
+    targetGain: 1,
+    fadeStartedAt: performance.now(),
+    loopGain: 1,
+    loopFadeInAt: null,
+    started: false,
+  };
+  audio.addEventListener("ended", () => restartLoop(track));
+  audio.addEventListener("error", () => {
+    track.started = false;
+    // 一時的な読込失敗や、開発中に後から音源を配置した場合もトラックを破棄しない。
+    console.warn(`[BGM] 読み込みに失敗しました: ${audio.src}`);
+  });
+  audio.addEventListener("canplay", () => {
+    if (track.targetGain > 0 && !track.started) void startTrack(track);
+  });
+  audio.addEventListener("loadedmetadata", () => {
+    const offset = BGM_START_OFFSETS[scene];
+    if (offset > 0 && audio.duration > offset) audio.currentTime = offset;
+    if (track.targetGain > 0 && !track.started) void startTrack(track);
+  });
+  syncVolume(track);
+  return track;
+}
+
+function restartLoop(track: Track): void {
+  track.audio.currentTime = Math.min(BGM_START_OFFSETS[track.scene], Math.max(0, track.audio.duration - 0.1));
+  track.loopGain = 0;
+  track.loopFadeInAt = performance.now();
+  track.started = false;
+  syncVolume(track);
+  void startTrack(track);
+}
+
+function beginFade(track: Track, target: number, now = performance.now()): void {
+  track.fromGain = track.gain;
+  track.targetGain = target;
+  track.fadeStartedAt = now;
+}
+
+/** 画面に対応するBGMへ、共通のフェード時間で自動切り替えする。 */
+export function setBgmScene(scene: BgmScene): void {
+  desiredScene = scene;
+  if (!initialized) return;
+  const active = tracks.find((track) => track.scene === scene && track.targetGain > 0);
+  if (active) return;
+
+  const now = performance.now();
+  for (const track of tracks) beginFade(track, 0, now);
+  const next = createTrack(scene, 0);
+  tracks.push(next);
+  beginFade(next, 1, now);
+  void startTrack(next);
+}
+
+function updateTrack(track: Track, now: number): void {
+  const fadeProgress = Math.min(1, Math.max(0, (now - track.fadeStartedAt) / FADE_MS));
+  track.gain = track.fromGain + (track.targetGain - track.fromGain) * fadeProgress;
+
+  if (track.started && !track.audio.paused && Number.isFinite(track.audio.duration) && track.audio.duration > 0) {
+    const remaining = track.audio.duration - track.audio.currentTime;
+    if (track.loopFadeInAt !== null) {
+      track.loopGain = Math.min(1, (now - track.loopFadeInAt) / FADE_MS);
+      if (track.loopGain >= 1) track.loopFadeInAt = null;
+    } else if (remaining <= FADE_SECONDS) {
+      track.loopGain = Math.max(0, remaining / FADE_SECONDS);
+      if (remaining <= 0.06) restartLoop(track);
+    } else {
+      track.loopGain = 1;
     }
   }
-  requestAnimationFrame(updateLoopFade);
+  syncVolume(track);
 }
 
-async function start(): Promise<void> {
-  if (!player || started) return;
-  syncVolume();
-  try {
-    await player.play();
-    started = true;
-  } catch {
-    // 自動再生制限中、または音源配置前。次のユーザー操作で再試行する。
-  }
+function update(now: number): void {
+  for (const track of tracks) updateTrack(track, now);
+  tracks = tracks.filter((track) => {
+    if (track.targetGain > 0 || track.gain > 0.002) return true;
+    track.audio.pause();
+    track.audio.src = "";
+    return false;
+  });
+  requestAnimationFrame(update);
 }
 
-/** public/assets/bgm.mp3 を全画面共通でループ再生する。 */
+/** 4種類のBGMを初期化する。実際の曲は画面遷移に応じて遅延読み込みされる。 */
 export function initBgm(): void {
-  if (player) return;
-  player = new Audio(BGM_PATH);
-  player.loop = false;
-  player.preload = "auto";
-  player.setAttribute("playsinline", "");
-  // バックグラウンドタブなどで描画更新が止まった場合の保険。
-  player.addEventListener("ended", restartWithFadeIn);
-  syncVolume();
+  if (initialized) return;
+  initialized = true;
+  const first = createTrack(desiredScene, 0);
+  tracks.push(first);
+  beginFade(first, 1);
 
-  const retry = () => { void start(); };
+  const retry = () => {
+    for (const track of tracks) {
+      if (track.targetGain <= 0) continue;
+      if (track.audio.error) track.audio.load();
+      void startTrack(track);
+    }
+  };
   document.addEventListener("pointerdown", retry);
   document.addEventListener("keydown", retry);
-  window.addEventListener("komalog-audio-change", syncVolume);
-  requestAnimationFrame(updateLoopFade);
-  void start();
+  window.addEventListener("komalog-audio-change", () => {
+    for (const track of tracks) syncVolume(track);
+  });
+  requestAnimationFrame(update);
+  void startTrack(first);
 }

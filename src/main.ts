@@ -4,8 +4,9 @@ import { clearSave, saveGame } from "./save";
 import type { Screen } from "./types";
 import { initHoverTooltips } from "./hoverTooltip";
 import { applySettingsClass } from "./settings";
-import { initBgm } from "./bgm";
+import { initBgm, setBgmScene } from "./bgm";
 import { initUiButtonSounds } from "./sound";
+import { isDebugAllAchievements, setDebugAllAchievements } from "./meta";
 import {
   renderActClear,
   renderBattle,
@@ -84,6 +85,12 @@ function autoSave(s: Screen) {
 }
 
 function render(s: Screen) {
+  if (s.kind === "title" || s.kind === "starter" || s.kind === "gameover") {
+    setBgmScene("title");
+  } else {
+    const act = Math.max(1, Math.min(3, ctx.run?.act ?? 1));
+    setBgmScene(act === 1 ? "stage1" : act === 2 ? "stage2" : "stage3");
+  }
   autoSave(s);
   app.innerHTML = "";
   switch (s.kind) {
@@ -128,6 +135,17 @@ function render(s: Screen) {
     book.title = "ユニット・シナジー・アイテム図鑑";
     book.addEventListener("click", () => showCompendium());
     app.appendChild(book);
+  }
+  if (["localhost", "127.0.0.1", "::1"].includes(window.location.hostname)) {
+    const debugAchievements = document.createElement("button");
+    debugAchievements.className = `local-achievement-toggle${isDebugAllAchievements() ? " active" : ""}`;
+    debugAchievements.textContent = isDebugAllAchievements() ? "🏆 実績：全解除表示" : "◻️ 実績：通常表示";
+    debugAchievements.title = "実績セーブを変更せず、全解除状態の表示だけを切り替えます";
+    debugAchievements.addEventListener("click", () => {
+      setDebugAllAchievements(!isDebugAllAchievements());
+      render(s);
+    });
+    app.appendChild(debugAchievements);
   }
 }
 

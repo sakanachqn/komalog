@@ -17,7 +17,7 @@ import type { SaveData } from "./save";
 import { isMuted, sfx, toggleMute } from "./sound";
 import { ASC_LEVELS, MAX_ASC, ascMods } from "./ascension";
 import { ACT_RULE_BY_ID, rollActRule } from "./data/actrules";
-import { LEGACY_UPGRADES, UNLOCK_INFO, bumpCounter, buyLegacy, discoverAncientRelics, discoverRelics, grantUnlock, hasAchievementMilestone, hasLegacy, hasUnlock, legacyLevel, meta, recheckPersistentAchievements, saveMeta } from "./meta";
+import { LEGACY_UPGRADES, UNLOCK_INFO, bumpCounter, buyLegacy, discoverAncientRelics, discoverRelics, grantUnlock, hasAchievementMilestone, hasLegacy, hasUnlock, isDebugAllAchievements, legacyLevel, meta, recheckPersistentAchievements, saveMeta } from "./meta";
 import { FLOOR_COUNT, NODE_META } from "./map";
 import { ctx, go } from "./router";
 import {
@@ -200,7 +200,9 @@ function showFirstVisitGuide(key: string, title: string, text: string): void {
     if (document.querySelector(".first-visit-guide")) return;
     const overlay = el("div", "modal-overlay first-visit-guide");
     const panel = el("div", "modal-panel first-visit-panel");
-    panel.append(el("h2", "", title), el("p", "", text), btn("わかった", "primary", () => overlay.remove()));
+    const copy = el("p");
+    copy.textContent = text.replaceAll("。", "。\n").trim();
+    panel.append(el("h2", "", title), copy, btn("わかった", "primary", () => overlay.remove()));
     overlay.appendChild(panel);
     overlay.addEventListener("click", (event) => { if (event.target === overlay) overlay.remove(); });
     document.body.appendChild(overlay);
@@ -648,7 +650,7 @@ const HELP_HTML = `
 
 export function showHelp() {
   const overlay = el("div", "modal-overlay");
-  const panel = el("div", "modal-panel");
+  const panel = el("div", "modal-panel help-panel");
   const head = el("div", "modal-head");
   head.append(el("h2", "", "📖 遊び方"), btn("✕", "modal-close", () => close()));
   const body = el("div", "modal-body help-body");
@@ -1054,7 +1056,7 @@ function showLastRunRecord(): void {
 function withTraitSide(
   run: RunState,
   content: HTMLElement,
-): { root: HTMLElement; refreshSide: () => void } {
+): { root: HTMLElement; side: HTMLElement; refreshSide: () => void } {
   const root = el("div", "page-flex");
   const side = el("div", "side-panel side-trait");
   const refreshSide = () => {
@@ -1063,7 +1065,7 @@ function withTraitSide(
   };
   refreshSide();
   root.append(content, side);
-  return { root, refreshSide };
+  return { root, side, refreshSide };
 }
 
 /* ================= タイトル ================= */
@@ -1095,20 +1097,11 @@ export function renderTitle(): HTMLElement {
     ];
     if (m.records.bestClearMs !== null) parts.push(`最短 ${fmtTime(m.records.bestClearMs)}`);
     if (m.records.ascBest >= 0) parts.push(`最高段位 ${m.records.ascBest}`);
-    parts.push(`実績 ${m.unlocks.length}/${Object.keys(UNLOCK_INFO).length}`);
+    parts.push(`実績 ${isDebugAllAchievements() ? Object.keys(UNLOCK_INFO).length : m.unlocks.length}/${Object.keys(UNLOCK_INFO).length}`);
     stats.textContent = `📜 ${parts.join(" ／ ")}`;
     hero.appendChild(stats);
   }
   hero.appendChild(el("div", "memory-balance", `🔹 記憶の欠片 ${m.memoryShards}`));
-  const nextLegacy = LEGACY_UPGRADES
-    .filter((up) => !hasLegacy(up.id) && (!up.requires || hasLegacy(up.requires)))
-    .sort((a, b) => a.cost - b.cost)[0];
-  if (nextLegacy) {
-    const goal = el("div", "next-goal");
-    const remaining = Math.max(0, nextLegacy.cost - m.memoryShards);
-    goal.innerHTML = `<small>次の記憶</small><b>${nextLegacy.icon} ${nextLegacy.name}</b><span>${nextLegacy.desc}</span><em>${remaining === 0 ? "解放できます" : `あと 🔹${remaining}`}</em>`;
-    hero.appendChild(goal);
-  }
   const save = loadGame();
   if (save) {
     discoverRelics(save.run.relics);
@@ -2930,33 +2923,38 @@ export function renderShop(node: MapNode, rescue = false): HTMLElement {
   }
 
   // 手持ちの売却
-  const rosterPanel = el("div", "center-screen");
+  const rosterPanel = el("div", "panel shop-side-roster");
   function refreshRoster() {
     rosterPanel.innerHTML = "";
-    if (run.roster.length === 0) return;
-    rosterPanel.appendChild(el("div", "sub", "手持ちユニット（クリックで売却）"));
-    const list = el("div", "roster-list");
-    for (const ou of run.roster) {
-      const def = unitDef(ou);
-      const onBoard = ou.pos !== null;
-      const chip = el("div", `roster-chip ${onBoard ? "on-board" : "on-bench"}`);
-      chip.dataset.unitTooltip = def.id;
-      chip.title = onBoard
-        ? `盤面に配置中（${ou.pos!.x + 1}列・${ou.pos!.y + 1}行）`
-        : "ベンチで待機中";
-      const sellValue = def.cost * (ou.star === 1 ? 1 : ou.star === 2 ? 3 : 9);
-      chip.append(
-        el("span", `roster-location ${onBoard ? "board" : "bench"}`, onBoard ? "盤面" : "ベンチ"),
-        el("span", "", `${def.icon} ${def.name} ${starsText(ou.star)}`),
-        btn(`売却 +${sellValue}G`, "", () => {
-          sellUnit(run, ou.iid);
-          sfx.coin();
-          rerenderAll();
-        }),
-      );
-      list.appendChild(chip);
-    }
-    rosterPanel.appendChild(list);
+    rosterPanel.appendChild(el("h3", "", "手持ちユニット（売却可能）"));
+    const appendGroup = (label: string, units: OwnedUnit[], onBoard: boolean) => {
+      const group = el("section", "shop-roster-group");
+      group.appendChild(el("b", "", `${onBoard ? "🗺️" : "🪑"} ${label} ${units.length}体`));
+      const list = el("div", "shop-roster-row");
+      if (units.length === 0) list.appendChild(el("em", "shop-roster-empty", "ユニットなし"));
+      for (const ou of units) {
+        const def = unitDef(ou);
+        const chip = el("div", `roster-chip ${onBoard ? "on-board" : "on-bench"}`);
+        chip.dataset.unitTooltip = def.id;
+        chip.title = onBoard
+          ? `盤面に配置中（${ou.pos!.x + 1}列・${ou.pos!.y + 1}行）`
+          : "ベンチで待機中";
+        const sellValue = def.cost * (ou.star === 1 ? 1 : ou.star === 2 ? 3 : 9);
+        chip.append(
+          el("span", "shop-roster-unit-name", `${def.icon} ${def.name} ${starsText(ou.star)}`),
+          btn(`売却 +${sellValue}G`, "", () => {
+            sellUnit(run, ou.iid);
+            sfx.coin();
+            rerenderAll();
+          }),
+        );
+        list.appendChild(chip);
+      }
+      group.appendChild(list);
+      rosterPanel.appendChild(group);
+    };
+    appendGroup("盤面", boardUnits(run), true);
+    appendGroup("ベンチ", benchUnits(run), false);
   }
 
   function rerenderAll() {
@@ -2964,13 +2962,15 @@ export function renderShop(node: MapNode, rescue = false): HTMLElement {
     stripHolder.innerHTML = "";
     stripHolder.appendChild(rosterStrip(run));
     refresh();
-    refreshRoster();
     side.refreshSide(); // 売却などで盤面が変わればシナジーも更新
+    side.side.appendChild(rosterPanel);
+    refreshRoster();
   }
 
   center.append(row, goodsRow, bar);
   const side = withTraitSide(run, center);
-  s.append(side.root, rosterPanel);
+  side.side.appendChild(rosterPanel);
+  s.append(side.root);
   refresh();
   refreshRoster();
   return s;

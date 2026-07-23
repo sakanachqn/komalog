@@ -972,9 +972,11 @@ button.primary:hover:not(:disabled) {
 .prepare-compendium-btn:hover { border-color: var(--gold); }
 .board-wrap {
   position: relative;
+  width: max-content;
 }
 .board {
   display: grid;
+  width: max-content;
   grid-template-columns: repeat(7, var(--cell));
   grid-template-rows: repeat(8, var(--cell));
   gap: 2px;
@@ -2065,8 +2067,21 @@ button.primary:hover:not(:disabled) {
 .board-wrap[data-battle-speed="3"] .skill-cast-label { font-size: 8px; animation-duration: .55s; }
 .board-wrap[data-battle-speed="2"] .float-text,
 .board-wrap[data-battle-speed="3"] .float-text { animation-duration: .55s; }
-.first-visit-panel { width: min(520px, 94vw); text-align: center; }
-.first-visit-panel p { color: var(--text); line-height: 1.75; white-space: pre-line; }
+.first-visit-panel {
+  width: fit-content;
+  min-width: min(520px, calc(100vw - 40px));
+  max-width: min(720px, calc(100vw - 40px));
+  align-items: stretch;
+  text-align: center;
+}
+.first-visit-panel p {
+  width: 100%;
+  color: var(--text);
+  line-height: 1.85;
+  text-align: left;
+  white-space: pre-line;
+}
+.first-visit-panel > button { align-self: center; }
 .run-build-review { width: min(920px, 100%); display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; margin: 12px auto; }
 .run-review-block { min-height: 112px; padding: 14px; text-align: left; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; }
 .run-review-block h3 { margin: 0 0 10px; color: var(--gold); font-size: 13px; }
@@ -2076,6 +2091,262 @@ button.primary:hover:not(:disabled) {
 .run-mvp { display: block; margin-bottom: 10px; color: #fff0a2; line-height: 1.5; }
 .run-review-block small { display: block; color: var(--muted); line-height: 1.6; }
 @media (max-width: 760px) { .run-build-review { grid-template-columns: 1fr; } }
+
+/* =====================================================================
+   かわいい中世ファンタジー・テーマ
+   冒険者ギルドの卓上ゲームをイメージした羊皮紙、木枠、真鍮の共通外観
+   ===================================================================== */
+:root {
+  --bg: #292117;
+  --bg2: #3a2b1d;
+  --panel: #f2dfb4;
+  --panel2: #e5c98f;
+  --border: #8d6638;
+  --text: #3f2c1f;
+  --muted: #79634c;
+  --gold: #a86718;
+  --hp: #b94e4a;
+  --mana: #4e78a7;
+  --shield: #d5e0df;
+  --ally: #4f8558;
+  --enemy: #a04d4d;
+  --accent: #7b944c;
+}
+
+body {
+  background:
+    radial-gradient(circle at 15% 18%, rgba(255,213,124,.09) 0 2px, transparent 3px),
+    radial-gradient(circle at 82% 72%, rgba(255,213,124,.06) 0 2px, transparent 3px),
+    linear-gradient(90deg, rgba(18,10,5,.13) 1px, transparent 1px),
+    linear-gradient(#302418, #211a13);
+  background-size: 73px 73px, 91px 91px, 8px 100%, auto;
+  color: var(--text);
+}
+
+h1, h2, h3, h4,
+.unit-card .name,
+.option-card b,
+.modal-head {
+  font-family: "Yu Mincho", "Hiragino Mincho ProN", "Meiryo", serif;
+  letter-spacing: .035em;
+}
+
+button {
+  color: #fff7df;
+  background:
+    linear-gradient(rgba(255,255,255,.07), transparent 45%),
+    linear-gradient(135deg, #76502d, #58371f);
+  border: 1px solid #b5864d;
+  border-bottom-color: #3b2415;
+  border-radius: 8px 10px 8px 11px;
+  box-shadow: inset 0 0 0 1px rgba(255,231,178,.12), 0 3px 0 #3d2718, 0 5px 10px rgba(25,13,7,.22);
+  text-shadow: 0 1px 1px rgba(36,19,8,.8);
+}
+button:hover:not(:disabled) {
+  color: #fff9e8;
+  background:
+    linear-gradient(rgba(255,255,255,.1), transparent 45%),
+    linear-gradient(135deg, #8c6638, #684524);
+  border-color: #d1a65e;
+  transform: translateY(-2px);
+  box-shadow: inset 0 0 0 1px rgba(255,239,193,.16), 0 4px 0 #3d2718, 0 7px 13px rgba(25,13,7,.26);
+}
+button:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: inset 0 1px 4px rgba(40,20,8,.35), 0 1px 0 #3d2718;
+}
+button.primary {
+  color: #fffbea;
+  background: linear-gradient(135deg, #78964e, #536f39);
+  border-color: #a9bb70;
+  border-bottom-color: #344727;
+  box-shadow: inset 0 0 0 1px rgba(235,245,190,.18), 0 3px 0 #344727, 0 6px 12px rgba(28,45,20,.23);
+}
+button.primary:hover:not(:disabled) { background: linear-gradient(135deg, #8da85c, #637e43); }
+button.danger { background: linear-gradient(135deg, #a45b4d, #743d36); border-color: #cf8876; }
+
+.hud,
+.panel,
+.modal-panel,
+.setting-row,
+.setting-toggle,
+.title-settings-panel,
+.last-run-panel,
+.run-review-block,
+.run-summary,
+.memory-reward,
+.post-run-goal {
+  color: var(--text);
+  background:
+    radial-gradient(circle at 12% 20%, rgba(117,73,28,.06) 0 1px, transparent 2px),
+    radial-gradient(circle at 75% 68%, rgba(117,73,28,.045) 0 1px, transparent 2px),
+    linear-gradient(100deg, rgba(255,255,255,.2), transparent 35%),
+    var(--panel);
+  background-size: 38px 38px, 47px 47px, auto, auto;
+  border: 2px solid #805b31;
+  box-shadow:
+    inset 0 0 0 2px rgba(255,241,196,.36),
+    inset 0 0 22px rgba(119,73,28,.09),
+    0 5px 14px rgba(24,13,6,.25);
+}
+
+.hud {
+  position: relative;
+  border-radius: 9px 12px 8px 11px;
+}
+.hud::before, .hud::after {
+  content: "◆";
+  position: absolute;
+  top: 50%;
+  color: #a97938;
+  font-size: 8px;
+  transform: translateY(-50%);
+}
+.hud::before { left: 4px; }
+.hud::after { right: 4px; }
+.hud-progress { background: linear-gradient(90deg, #78964e var(--progress), rgba(93,62,30,.15) var(--progress)); }
+.hud .hp { color: #a83f40; }
+.hud .gold, .trait-row.active, .panel h3 { color: #9b5c13; }
+
+.modal-overlay { background: rgba(30,20,12,.76); backdrop-filter: blur(2px); }
+.modal-panel {
+  border-radius: 13px 16px 12px 17px;
+  outline: 1px solid rgba(219,179,107,.55);
+  outline-offset: -6px;
+}
+.modal-head { border-bottom: 2px solid rgba(128,91,49,.45); }
+.modal-head h2, .center-screen h2 { color: #68431f; text-shadow: 0 1px rgba(255,247,214,.8); }
+.help-body b, .hover-skill b { color: #657d3f; }
+
+.hover-tooltip,
+.map-node-tooltip {
+  color: var(--text);
+  background:
+    linear-gradient(110deg, rgba(255,255,255,.22), transparent 40%),
+    #f3dfb5;
+  border: 2px solid #8e6637;
+  border-radius: 8px 11px 8px 12px;
+  box-shadow: inset 0 0 0 2px rgba(255,244,207,.42), 0 10px 25px rgba(29,16,8,.38);
+}
+.hover-tooltip > b, .map-node-tooltip b { color: #8c5417; }
+.hover-skill p, .hover-trait-levels { color: #4c3929; }
+.hover-skill { border-top-color: rgba(110,75,38,.22); }
+
+.map-wrap {
+  background:
+    radial-gradient(circle at 20% 22%, rgba(83,113,62,.13) 0 3px, transparent 4px),
+    radial-gradient(circle at 72% 61%, rgba(91,125,68,.1) 0 5px, transparent 6px),
+    repeating-linear-gradient(7deg, transparent 0 18px, rgba(105,68,28,.035) 19px 20px),
+    #dfc58f;
+  border: 3px solid #694525;
+  box-shadow: inset 0 0 0 3px #b8874e, inset 0 0 35px rgba(80,47,19,.22), 0 7px 17px rgba(25,13,6,.3);
+}
+.map-inner svg line { stroke: #9c7647; }
+.map-inner svg line.visited-path { stroke: #816b4f; }
+.map-node {
+  color: var(--text);
+  background: radial-gradient(circle at 38% 32%, #fff0be, #d6b675 72%);
+  border: 2px solid #76502a;
+  border-radius: 50% 46% 49% 44%;
+  box-shadow: inset 0 0 0 2px rgba(255,245,207,.42), 0 3px 0 #573719, 0 5px 9px rgba(44,24,9,.28);
+  text-shadow: none;
+}
+.map-node.current {
+  background: radial-gradient(circle at 38% 32%, #b5d18b, #718c4a 72%);
+  border-color: #4c6738;
+  box-shadow: 0 0 0 5px rgba(107,139,69,.2), 0 0 20px rgba(104,137,67,.55);
+}
+.map-node.available { border-color: #b57621; box-shadow: 0 0 0 3px rgba(245,208,123,.25), 0 4px 0 #68431e; }
+.map-legend { color: #d9c8a9; }
+
+.board {
+  background:
+    linear-gradient(rgba(255,255,255,.06), transparent),
+    repeating-linear-gradient(90deg, rgba(63,34,15,.08) 0 1px, transparent 1px 31px),
+    linear-gradient(135deg, #79502c, #54341f);
+  border: 3px solid #382317;
+  border-radius: 11px;
+  box-shadow: inset 0 0 0 3px #9b6e3c, inset 0 0 25px rgba(31,15,7,.3), 0 7px 16px rgba(24,13,7,.34);
+}
+.cell {
+  border: 1px solid rgba(241,213,158,.12);
+  border-radius: 5px 7px 5px 8px;
+  background: rgba(255,235,187,.045);
+  box-shadow: inset 0 1px rgba(255,239,198,.04);
+}
+.cell.enemy-zone { background: rgba(150,65,57,.15); }
+.cell.ally-zone { background: rgba(90,132,71,.16); }
+.bench {
+  padding: 7px;
+  background: linear-gradient(135deg, #6e4728, #49301e);
+  border: 2px solid #382317;
+  border-radius: 11px;
+  box-shadow: inset 0 0 0 2px #93663a, 0 4px 9px rgba(25,13,7,.26);
+}
+.bench-slot {
+  background: rgba(238,207,151,.13);
+  border-color: rgba(232,197,135,.35);
+  border-radius: 7px 9px 7px 9px;
+}
+
+.unit-card,
+.option-card {
+  color: var(--text);
+  background:
+    radial-gradient(circle at 82% 15%, rgba(121,78,31,.055) 0 2px, transparent 3px),
+    linear-gradient(105deg, rgba(255,255,255,.24), transparent 38%),
+    #eed9aa;
+  border: 2px solid #8a6033;
+  border-radius: 9px 13px 9px 14px;
+  box-shadow: inset 0 0 0 2px rgba(255,245,210,.33), 0 5px 10px rgba(37,19,7,.23);
+  text-shadow: none;
+}
+.unit-card:hover:not(:disabled),
+.option-card:hover:not(:disabled) {
+  color: var(--text);
+  background:
+    linear-gradient(105deg, rgba(255,255,255,.28), transparent 38%),
+    #f5e3b9;
+  border-color: #b27427;
+  box-shadow: inset 0 0 0 2px rgba(255,248,218,.42), 0 8px 14px rgba(37,19,7,.27);
+}
+.unit-card .skill, .unit-card .traits, .center-screen .sub { color: #725e47; }
+.unit-card,
+.option-card {
+  font-family: "Yu Gothic", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+  font-weight: 500;
+}
+.unit-card .name,
+.option-card b {
+  font-family: "Yu Gothic", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+  font-weight: 800;
+  letter-spacing: .015em;
+}
+.unit-card .skill,
+.option-card {
+  line-height: 1.55;
+}
+.unit-card.cost-2 { border-color: #62829a; }
+.unit-card.cost-3 { border-color: #8a6595; }
+.unit-card.cost-4 { border-color: #bd7b2b; }
+.unit-card.cost-5 { border-color: #aa5148; background: linear-gradient(145deg, #f0d7a5, #eab7a0); }
+.shop-upgrade-badge {
+  color: #51340f;
+  background: linear-gradient(90deg, #dca841, #ffe6a0, #dca841);
+  text-shadow: 0 1px #fff1bf;
+}
+.roster-strip, .roster-chip, .blood-trade, .craft-workbench {
+  color: var(--text);
+  background: #e8cd97;
+  border-color: #896036;
+  box-shadow: inset 0 0 0 1px rgba(255,242,199,.35);
+}
+.panel { border-radius: 8px 11px 8px 12px; }
+.trait-row { border-bottom: 1px dashed rgba(111,76,39,.14); }
+.trait-row.inactive { color: #8a755d; }
+.setting-row, .setting-toggle { background: rgba(238,213,166,.74); }
+.title-screen .tagline, .title-screen p { color: #cdbb9e; }
+.title-screen h1 { color: #f5d994; text-shadow: 0 3px #543017, 0 0 18px rgba(238,191,99,.25); }
 
 /* 手持ち一覧ストリップ */
 .roster-strip {
@@ -2162,9 +2433,272 @@ button.primary:hover:not(:disabled) {
   color: var(--muted);
   background: rgba(255, 255, 255, 0.08);
 }
+
+/* ===== 中世ファンタジーテーマ：通知・ポップアップ補完 ===== */
+.unlock-toast {
+  color: #704415;
+  background:
+    linear-gradient(105deg, rgba(255,255,255,.27), transparent 42%),
+    #f1dcae;
+  border: 2px solid #a66b24;
+  border-radius: 8px 11px 8px 12px;
+  box-shadow: inset 0 0 0 2px rgba(255,246,210,.42), 0 6px 18px rgba(35,19,8,.34);
+  text-shadow: none;
+}
+
+.team-cap-toast {
+  color: var(--text);
+  background:
+    radial-gradient(circle at 16% 24%, rgba(123,78,30,.06) 0 2px, transparent 3px),
+    linear-gradient(110deg, rgba(255,255,255,.25), transparent 40%),
+    #f2ddb0;
+  border: 3px solid #76502b;
+  border-radius: 10px 14px 10px 15px;
+  outline: 1px solid rgba(220,174,93,.7);
+  outline-offset: -7px;
+  box-shadow: inset 0 0 24px rgba(113,67,24,.1), 0 12px 30px rgba(34,18,8,.38);
+  text-shadow: none;
+}
+.team-cap-toast small { color: #7c552d; }
+.team-cap-toast b {
+  color: #5d3b1c;
+  font-family: "Yu Mincho", "Hiragino Mincho ProN", "Meiryo", serif;
+  text-shadow: 0 1px rgba(255,248,218,.9);
+}
+.team-cap-toast > span { color: #79634c; }
+.team-cap-slots i {
+  background: #cdb47f;
+  border: 2px solid #896237;
+  border-radius: 5px 7px 5px 7px;
+  box-shadow: inset 0 1px rgba(255,244,205,.42);
+}
+.team-cap-slots i.new {
+  background: #83a254;
+  border-color: #4f7139;
+  box-shadow: 0 0 0 3px rgba(123,151,78,.2), 0 0 14px rgba(106,143,69,.6);
+}
+
+.legacy-card,
+.achievement-card,
+.compendium-card,
+.last-run-section,
+.last-run-unit,
+.achievement-milestones {
+  color: var(--text);
+  background:
+    linear-gradient(110deg, rgba(255,255,255,.18), transparent 40%),
+    #e8cd98;
+  border-color: #91673a;
+  box-shadow: inset 0 0 0 1px rgba(255,242,200,.34);
+}
+.legacy-card { border-color: #947047; }
+.legacy-card b { color: #704719; }
+.legacy-card.owned,
+.achievement-card.achieved {
+  background: linear-gradient(135deg, #dce1ac, #c7d093);
+  border-color: #718648;
+}
+.achievement-card.achieved .achievement-state,
+.achievement-milestones div.reached { color: #476c3d; }
+.achievement-card em { color: #476d76; }
+.last-run-unit.on-board { border-color: #617f54; }
+.last-run-top { color: #754a1b; background: rgba(176,112,38,.13); border: 1px solid rgba(145,93,37,.25); }
+.last-run-relic-list > span { color: #78501d; background: rgba(176,119,44,.13); border-color: rgba(153,98,32,.34); }
+.last-run-relic-list > span.ancient { color: #70410e; background: rgba(198,139,43,.2); border-color: rgba(166,105,22,.48); }
+
+.compendium-filter {
+  color: var(--text);
+  background: #ecd6a7;
+  border-color: #8d6638;
+  box-shadow: 0 3px 8px rgba(43,23,9,.14);
+}
+.compendium-filter-select {
+  color: var(--text);
+  background: #f5e5bf;
+  border-color: #8d6638;
+}
+.compendium-skill { border-top-color: rgba(112,76,38,.2); }
+
+.craft-material-slot {
+  color: var(--text);
+  background: rgba(226,197,143,.76);
+  border-color: rgba(137,94,47,.56);
+}
+.craft-material-slot.filled { background: #efd9aa; }
+
+.battle-banner {
+  color: #fff5d9;
+  background:
+    radial-gradient(ellipse at center, rgba(88,57,28,.88), rgba(41,26,15,.72) 52%, rgba(32,19,10,.22) 78%, transparent);
+  text-shadow: 0 3px 0 #3c2413, 0 0 18px rgba(255,220,142,.4);
+}
+.battle-banner.win { color: #f5d78d; }
+.battle-banner.lose { color: #e79a85; }
+
+/* ===== 大型ポップアップの軽量化・視認性補正 ===== */
+.modal-overlay {
+  backdrop-filter: none;
+}
+.compendium-panel,
+.tutorial-panel,
+.help-panel,
+.legacy-panel,
+.achievements-panel,
+.last-run-panel {
+  background: #efdaad;
+  background-image: none;
+  box-shadow: 0 10px 24px rgba(34,18,8,.34);
+  animation: lightModalIn .14s ease-out;
+}
+.compendium-panel .modal-body,
+.tutorial-panel .tutorial-body,
+.help-panel .modal-body,
+.legacy-panel .modal-body,
+.achievements-panel .modal-body,
+.last-run-panel .modal-body {
+  contain: layout paint;
+}
+.compendium-card,
+.legacy-card,
+.achievement-card,
+.last-run-section,
+.last-run-unit,
+.achievement-milestones {
+  background: #e7cb94;
+  background-image: none;
+  box-shadow: none;
+}
+.compendium-card:hover,
+.legacy-card:hover {
+  background: #edd6a7;
+}
+@keyframes lightModalIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: none; }
+}
+
+.skill-scaling {
+  padding: 2px 7px;
+  font-weight: 900;
+  text-shadow: none;
+}
+.skill-scaling.attack {
+  color: #6e2714;
+  background: #efbd83;
+  border-color: #a84d28;
+}
+.skill-scaling.spell {
+  color: #173f6d;
+  background: #b8d7e9;
+  border-color: #477ba6;
+}
+
+.title-settings-panel {
+  color: #3f2c1f;
+  background: #ecd3a1;
+  background-image: none;
+  border: 2px solid #79532d;
+  box-shadow: inset 0 0 0 2px rgba(255,244,204,.42), 0 6px 16px rgba(31,16,7,.24);
+}
+.title-settings-panel h3 { color: #704415; }
+.title-volume-row {
+  color: #44301f;
+  font-weight: 800;
+}
+.title-volume-row input { accent-color: #637e43; }
+.title-setting-toggle {
+  color: #3f2c1f;
+  background: #f5e3bb;
+  border: 1px solid #9a7041;
+  box-shadow: inset 0 1px rgba(255,250,226,.5);
+}
+.title-setting-toggle b {
+  color: #4a321e;
+  font-weight: 900;
+}
+.title-setting-toggle small { color: #715940; }
+.title-setting-toggle input { accent-color: #637e43; }
+
+.local-achievement-toggle {
+  position: fixed;
+  z-index: 450;
+  top: 12px;
+  left: 12px;
+  padding: 7px 11px;
+  color: #f7e8c2;
+  font-size: 11px;
+  background: linear-gradient(135deg, #654326, #452c1b);
+  border-color: #a77a43;
+}
+.local-achievement-toggle.active {
+  color: #3d2b17;
+  background: linear-gradient(135deg, #f0d58e, #cfa24a);
+  border-color: #f6dfa0;
+  text-shadow: none;
+}
 .roster-chip button {
   padding: 2px 8px;
   font-size: 11px;
+}
+.shop-side-roster {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+.shop-side-roster > h3 {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #704719;
+  font-size: 13px;
+}
+.shop-roster-group {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+.shop-roster-group > b {
+  color: #6c5135;
+  font-size: 11px;
+}
+.shop-roster-row {
+  min-height: 43px;
+  max-height: 380px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 2px 3px 5px;
+  scrollbar-width: thin;
+}
+.shop-roster-row .roster-chip {
+  width: 100%;
+  min-width: 0;
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 4px 6px;
+  gap: 5px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.shop-roster-unit-name {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+}
+.shop-roster-row .roster-chip button {
+  padding: 3px 5px;
+  font-size: 9px;
+}
+.shop-roster-empty {
+  color: var(--muted);
+  font-size: 10px;
+  font-style: normal;
 }
 .abandon-btn {
   padding: 5px 9px;

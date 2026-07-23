@@ -110,8 +110,19 @@ export function hasLegacy(id: string): boolean {
   return meta().legacyUnlocks.includes(id);
 }
 
+let debugAllAchievements = false;
+
+/** localhost専用UIから使う一時表示。実績セーブや報酬は変更しない。 */
+export function setDebugAllAchievements(enabled: boolean): void {
+  debugAllAchievements = enabled;
+}
+
+export function isDebugAllAchievements(): boolean {
+  return debugAllAchievements;
+}
+
 export function hasAchievementMilestone(level: number): boolean {
-  return meta().achievementMilestones.includes(level);
+  return debugAllAchievements || meta().achievementMilestones.includes(level);
 }
 
 function checkAchievementMilestones(): void {
@@ -223,7 +234,7 @@ export const UNLOCK_INFO: Record<string, { cond: string; reward: string; rewardS
 
 export function hasUnlock(id: string): boolean {
   const m = meta();
-  return m.unlocks.includes(id) || m.legacyUnlocks.includes(id);
+  return (debugAllAchievements && id in UNLOCK_INFO) || m.unlocks.includes(id) || m.legacyUnlocks.includes(id);
 }
 
 export function grantUnlock(id: string) {
