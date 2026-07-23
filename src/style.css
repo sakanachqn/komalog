@@ -2671,6 +2671,127 @@ button.danger { background: linear-gradient(135deg, #a45b4d, #743d36); border-co
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 9px;
 }
+.shop-formation {
+  width: 100%;
+  min-width: 0;
+}
+.shop-formation-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+.shop-formation-head h3 { margin: 0; color: #704719; }
+.shop-formation-head small { color: var(--muted); font-size: 9px; text-align: right; }
+.shop-mini-board {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+  padding: 5px;
+  background: linear-gradient(135deg, #76502d, #4d311e);
+  border: 2px solid #3b2516;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 2px #93663a;
+}
+.shop-mini-cell,
+.shop-mini-bench-slot {
+  position: relative;
+  aspect-ratio: 1;
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(112,151,82,.17);
+  border: 1px solid rgba(243,217,163,.16);
+  border-radius: 4px;
+}
+.shop-mini-bench {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 2px;
+  margin-top: 5px;
+  padding: 4px;
+  background: #654326;
+  border: 1px solid #3b2516;
+  border-radius: 7px;
+}
+.shop-mini-bench-slot { background: rgba(238,207,151,.13); }
+.shop-mini-cell.drag-over,
+.shop-mini-bench-slot.drag-over {
+  background: rgba(117,169,82,.42);
+  border-color: #d8db8b;
+  box-shadow: inset 0 0 8px rgba(214,233,139,.34);
+}
+.shop-mini-unit {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  cursor: grab;
+}
+.shop-mini-unit:active { cursor: grabbing; }
+.shop-mini-unit.dragging { opacity: .35; }
+.shop-mini-unit.selected {
+  background: rgba(246,215,129,.24);
+  outline: 2px solid #f0cb68;
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+.shop-mini-unit > .art-icon {
+  width: 72%;
+  height: 72%;
+  vertical-align: 0;
+}
+.shop-mini-unit-art { font-size: 22px; line-height: 1; }
+.shop-mini-unit > sup {
+  position: absolute;
+  top: 0;
+  right: 1px;
+  color: #ffe28b;
+  font-size: 6px;
+  letter-spacing: -1px;
+  text-shadow: 0 1px 2px #2d1608;
+}
+.shop-mini-unit > .shop-mini-item {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 14px;
+  height: 14px;
+  border: 1px solid #e7ca82;
+}
+.shop-mini-sell {
+  min-height: 39px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+  margin-top: 7px;
+  padding: 6px 8px;
+  color: #735d45;
+  font-size: 10px;
+  background: rgba(245,226,184,.72);
+  border: 1px solid #9b7040;
+  border-radius: 7px;
+}
+.shop-mini-sell-unit {
+  min-width: 0;
+  overflow: hidden;
+  color: #432e1d;
+  font-weight: 800;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: help;
+}
+.shop-mini-sell button {
+  flex: 0 0 auto;
+  padding: 4px 7px;
+  font-size: 9px;
+}
+.shop-item-strip {
+  min-height: 43px;
+}
 .shop-side-roster > h3 {
   grid-column: 1 / -1;
   margin: 0;

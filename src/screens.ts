@@ -483,6 +483,24 @@ function rosterStrip(run: RunState): HTMLElement {
   return wrap;
 }
 
+/** ショップ上部用。ミニ盤面と重複するユニット情報を省き、未装備アイテムだけ表示する。 */
+function shopItemStrip(run: RunState): HTMLElement {
+  const wrap = el("div", "roster-strip shop-item-strip");
+  wrap.appendChild(el("span", "rs-label", "所持アイテム"));
+  if (run.items.length === 0) {
+    wrap.appendChild(el("span", "rs-empty", "—"));
+    return wrap;
+  }
+  for (const id of run.items) {
+    const item = ITEM_BY_ID.get(id);
+    if (!item) continue;
+    const chip = itemArt(item);
+    chip.title = `${item.name}\n${item.desc}`;
+    wrap.appendChild(chip);
+  }
+  return wrap;
+}
+
 function traitPanel(board: OwnedUnit[]): HTMLElement {
   const p = el("div", "panel");
   p.appendChild(el("h3", "", "シナジー"));
@@ -2740,7 +2758,7 @@ export function renderShop(node: MapNode, rescue = false): HTMLElement {
   const benchStatus = el("div", "shop-bench-status");
   center.appendChild(benchStatus);
   const stripHolder = el("div");
-  stripHolder.appendChild(rosterStrip(run));
+  stripHolder.appendChild(shopItemStrip(run));
   center.appendChild(stripHolder);
 
   let offers: (UnitDef | null)[] = rollOffers();
@@ -2923,57 +2941,164 @@ export function renderShop(node: MapNode, rescue = false): HTMLElement {
     );
   }
 
-  // 手持ちの売却
-  const rosterPanel = el("div", "panel shop-side-roster");
-  function refreshRoster() {
-    rosterPanel.innerHTML = "";
-    rosterPanel.appendChild(el("h3", "", "手持ちユニット（売却可能）"));
-    const appendGroup = (label: string, units: OwnedUnit[], onBoard: boolean) => {
-      const group = el("section", "shop-roster-group");
-      group.appendChild(el("b", "", `${onBoard ? "🗺️" : "🪑"} ${label} ${units.length}体`));
-      const list = el("div", "shop-roster-row");
-      if (units.length === 0) list.appendChild(el("em", "shop-roster-empty", "ユニットなし"));
-      for (const ou of units) {
-        const def = unitDef(ou);
-        const chip = el("div", `roster-chip ${onBoard ? "on-board" : "on-bench"}`);
-        chip.dataset.unitTooltip = def.id;
-        chip.title = onBoard
-          ? `盤面に配置中（${ou.pos!.x + 1}列・${ou.pos!.y + 1}行）`
-          : "ベンチで待機中";
-        const sellValue = def.cost * (ou.star === 1 ? 1 : ou.star === 2 ? 3 : 9);
-        chip.append(
-          el("span", "shop-roster-unit-name", `${def.icon} ${def.name} ${starsText(ou.star)}`),
-          btn(`売却 +${sellValue}G`, "", () => {
-            sellUnit(run, ou.iid);
-            sfx.coin();
-            rerenderAll();
-          }),
-        );
-        list.appendChild(chip);
-      }
-      group.appendChild(list);
-      rosterPanel.appendChild(group);
+  // ショップ内の簡易編成盤面
+  const shopFormation = el("div", "panel shop-formation");
+  let selectedShopUnit: number | null = null;
+  function refreshFormation() {
+    shopFormation.innerHTML = "";
+    const head = el("div", "shop-formation-head");
+    head.append(
+      el("h3", "", "🗺️ 編成変更"),
+      el("small", "", `配置 ${boardUnits(run).length}/${teamCap(run)}　ドラッグで移動・交換`),
+    );
+    shopFormation.appendChild(head);
+    const miniBoard = el("div", "shop-mini-board");
+    const makeDraggable = (target: HTMLElement, iid: number) => {
+      target.draggable = true;
+      target.addEventListener("dragstart", (event) => {
+        event.dataTransfer?.setData("text/plain", String(iid));
+        if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+        target.classList.add("dragging");
+      });
+      target.addEventListener("dragend", () => target.classList.remove("dragging"));
     };
-    appendGroup("盤面", boardUnits(run), true);
-    appendGroup("ベンチ", benchUnits(run), false);
+    const readIid = (event: DragEvent) => Number(event.dataTransfer?.getData("text/plain"));
+    const allowDrop = (target: HTMLElement) => {
+      target.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+        target.classList.add("drag-over");
+      });
+      target.addEventListener("dragleave", () => target.classList.remove("drag-over"));
+      target.addEventListener("drop", () => target.classList.remove("drag-over"));
+    };
+    const moveToBoard = (sourceIid: number, x: number, y: number) => {
+      const source = run.roster.find((unit) => unit.iid === sourceIid);
+      if (!source) return;
+      const target = run.roster.find((unit) => unit.pos?.x === x && unit.pos?.y === y);
+      if (target?.iid === source.iid) return;
+      if (!target && source.pos === null && boardUnits(run).length >= teamCap(run)) {
+        showAttentionMessage(msg, `⚠️ 配置上限は ${teamCap(run)}体です。盤面のユニットと入れ替えてください`);
+        return;
+      }
+      const oldPos = source.pos ? { ...source.pos } : null;
+      source.pos = { x, y };
+      if (target) target.pos = oldPos;
+      sfx.ui("tap");
+      rerenderAll();
+    };
+    for (let y = 4; y < BOARD_ROWS; y++) {
+      for (let x = 0; x < BOARD_COLS; x++) {
+        const cell = el("div", "shop-mini-cell");
+        const owned = run.roster.find((unit) => unit.pos?.x === x && unit.pos?.y === y);
+        if (owned) {
+          const def = unitDef(owned);
+          const piece = el("div", "shop-mini-unit");
+          piece.dataset.unitTooltip = def.id;
+          piece.append(unitArt(def, "shop-mini-unit-art"), el("sup", "", starsText(owned.star)));
+          if (owned.item) piece.appendChild(itemArt(ITEM_BY_ID.get(owned.item)!, "shop-mini-item"));
+          makeDraggable(piece, owned.iid);
+          piece.classList.toggle("selected", selectedShopUnit === owned.iid);
+          piece.addEventListener("click", () => {
+            selectedShopUnit = owned.iid;
+            refreshFormation();
+          });
+          cell.appendChild(piece);
+        }
+        allowDrop(cell);
+        cell.addEventListener("drop", (event) => {
+          event.preventDefault();
+          moveToBoard(readIid(event), x, y);
+        });
+        miniBoard.appendChild(cell);
+      }
+    }
+    shopFormation.appendChild(miniBoard);
+
+    const miniBench = el("div", "shop-mini-bench");
+    const bench = benchUnits(run);
+    for (let i = 0; i < BENCH_SIZE; i++) {
+      const slot = el("div", "shop-mini-bench-slot");
+      const owned = bench[i];
+      if (owned) {
+        const def = unitDef(owned);
+        const piece = el("div", "shop-mini-unit");
+        piece.dataset.unitTooltip = def.id;
+        piece.append(unitArt(def, "shop-mini-unit-art"), el("sup", "", starsText(owned.star)));
+        if (owned.item) piece.appendChild(itemArt(ITEM_BY_ID.get(owned.item)!, "shop-mini-item"));
+        makeDraggable(piece, owned.iid);
+        piece.classList.toggle("selected", selectedShopUnit === owned.iid);
+        piece.addEventListener("click", () => {
+          selectedShopUnit = owned.iid;
+          refreshFormation();
+        });
+        slot.appendChild(piece);
+      }
+      allowDrop(slot);
+      slot.addEventListener("drop", (event) => {
+        event.preventDefault();
+        const source = run.roster.find((unit) => unit.iid === readIid(event));
+        if (!source) return;
+        const target = bench[i];
+        if (target?.iid === source.iid) return;
+        if (source.pos) {
+          const oldPos = { ...source.pos };
+          source.pos = null;
+          if (target) target.pos = oldPos;
+        } else if (target) {
+          const sourceIndex = run.roster.indexOf(source);
+          const targetIndex = run.roster.indexOf(target);
+          [run.roster[sourceIndex], run.roster[targetIndex]] = [run.roster[targetIndex], run.roster[sourceIndex]];
+        } else {
+          // 空き枠へ移した場合はベンチ列の末尾へ並べ直す。
+          const sourceIndex = run.roster.indexOf(source);
+          run.roster.splice(sourceIndex, 1);
+          run.roster.push(source);
+        }
+        sfx.ui("tap");
+        rerenderAll();
+      });
+      miniBench.appendChild(slot);
+    }
+    shopFormation.appendChild(miniBench);
+    const selected = run.roster.find((unit) => unit.iid === selectedShopUnit);
+    const sellArea = el("div", "shop-mini-sell");
+    if (!selected) {
+      sellArea.appendChild(el("span", "", "ユニットを選択すると、詳細と売却ボタンを表示します"));
+    } else {
+      const def = unitDef(selected);
+      const sellValue = def.cost * (selected.star === 1 ? 1 : selected.star === 2 ? 3 : 9);
+      const identity = el("span", "shop-mini-sell-unit", `${def.icon} ${def.name} ${starsText(selected.star)}`);
+      identity.dataset.unitTooltip = def.id;
+      sellArea.append(
+        identity,
+        btn(`売却 +${sellValue}G`, "danger", () => {
+          sellUnit(run, selected.iid);
+          selectedShopUnit = null;
+          sfx.coin();
+          rerenderAll();
+        }),
+      );
+    }
+    shopFormation.appendChild(sellArea);
   }
 
   function rerenderAll() {
     s.replaceChild(hud(run), s.firstChild!);
     stripHolder.innerHTML = "";
-    stripHolder.appendChild(rosterStrip(run));
+    stripHolder.appendChild(shopItemStrip(run));
     refresh();
     side.refreshSide(); // 売却などで盤面が変わればシナジーも更新
-    side.side.appendChild(rosterPanel);
-    refreshRoster();
+    side.side.appendChild(shopFormation);
+    refreshFormation();
   }
 
   center.append(row, goodsRow, bar);
   const side = withTraitSide(run, center);
-  side.side.appendChild(rosterPanel);
+  side.side.appendChild(shopFormation);
   s.append(side.root);
   refresh();
-  refreshRoster();
+  refreshFormation();
   return s;
 }
 
