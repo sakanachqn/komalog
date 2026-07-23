@@ -2731,6 +2731,7 @@ button.danger { background: linear-gradient(135deg, #a45b4d, #743d36); border-co
   cursor: grab;
 }
 .shop-mini-unit:active { cursor: grabbing; }
+.shop-mini-unit.preview-only { cursor: help; }
 .shop-mini-unit.dragging { opacity: .35; }
 .shop-mini-unit.selected {
   background: rgba(246,215,129,.24);
@@ -2791,6 +2792,13 @@ button.danger { background: linear-gradient(135deg, #a45b4d, #743d36); border-co
 }
 .shop-item-strip {
   min-height: 43px;
+}
+.reward-formation-note {
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.45;
+  text-align: center;
 }
 .shop-side-roster > h3 {
   grid-column: 1 / -1;

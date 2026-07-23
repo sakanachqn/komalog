@@ -1086,6 +1086,52 @@ function withTraitSide(
   return { root, side, refreshSide };
 }
 
+/** 報酬選択中に現在の編成を確認するための、読み取り専用ミニ盤面。 */
+function formationPreview(run: RunState): HTMLElement {
+  const panel = el("div", "panel shop-formation reward-formation");
+  const head = el("div", "shop-formation-head");
+  head.append(
+    el("h3", "", "🗺️ 現在の編成"),
+    el("small", "", `配置 ${boardUnits(run).length}/${teamCap(run)}`),
+  );
+  panel.appendChild(head);
+  const board = el("div", "shop-mini-board");
+  for (let y = 4; y < BOARD_ROWS; y++) {
+    for (let x = 0; x < BOARD_COLS; x++) {
+      const cell = el("div", "shop-mini-cell");
+      const owned = run.roster.find((unit) => unit.pos?.x === x && unit.pos?.y === y);
+      if (owned) {
+        const def = unitDef(owned);
+        const piece = el("div", "shop-mini-unit preview-only");
+        piece.dataset.unitTooltip = def.id;
+        piece.append(unitArt(def, "shop-mini-unit-art"), el("sup", "", starsText(owned.star)));
+        if (owned.item) piece.appendChild(itemArt(ITEM_BY_ID.get(owned.item)!, "shop-mini-item"));
+        cell.appendChild(piece);
+      }
+      board.appendChild(cell);
+    }
+  }
+  panel.appendChild(board);
+  const bench = el("div", "shop-mini-bench");
+  const waiting = benchUnits(run);
+  for (let i = 0; i < BENCH_SIZE; i++) {
+    const slot = el("div", "shop-mini-bench-slot");
+    const owned = waiting[i];
+    if (owned) {
+      const def = unitDef(owned);
+      const piece = el("div", "shop-mini-unit preview-only");
+      piece.dataset.unitTooltip = def.id;
+      piece.append(unitArt(def, "shop-mini-unit-art"), el("sup", "", starsText(owned.star)));
+      if (owned.item) piece.appendChild(itemArt(ITEM_BY_ID.get(owned.item)!, "shop-mini-item"));
+      slot.appendChild(piece);
+    }
+    bench.appendChild(slot);
+  }
+  panel.appendChild(bench);
+  panel.appendChild(el("div", "reward-formation-note", "報酬を選ぶ前に、所持ユニットとシナジーを確認できます"));
+  return panel;
+}
+
 /* ================= タイトル ================= */
 
 export function renderTitle(): HTMLElement {
@@ -2558,7 +2604,10 @@ function goldReward(node: MapNode): number {
 /* ================= リザルト ================= */
 
 export function renderResult(node: MapNode, win: boolean, hpLost: number): HTMLElement {
-  return withTraitSide(ctx.run!, buildResult(node, win, hpLost)).root;
+  const run = ctx.run!;
+  const layout = withTraitSide(run, buildResult(node, win, hpLost));
+  if (win) layout.side.appendChild(formationPreview(run));
+  return layout.root;
 }
 
 function buildResult(node: MapNode, win: boolean, hpLost: number): HTMLElement {
@@ -2678,6 +2727,9 @@ function buildResult(node: MapNode, win: boolean, hpLost: number): HTMLElement {
     row.innerHTML = "";
     for (const def of choices) {
       const firstInRun = !run.roster.some((unit) => unit.defId === def.id);
+      const upgradeStar = purchaseStarUpgrade(run, def.id);
+      const boardCopies = boardUnits(run).filter((unit) => unit.defId === def.id).length;
+      const benchCopies = benchUnits(run).filter((unit) => unit.defId === def.id).length;
       const card = unitCard(def, `仲間にする`, () => {
         if (!addUnit(run, def)) {
           showRewardBenchSale(def, () => go({ kind: "map" }));
@@ -2687,6 +2739,16 @@ function buildResult(node: MapNode, win: boolean, hpLost: number): HTMLElement {
         window.setTimeout(() => go({ kind: "map" }), document.documentElement.classList.contains("reduce-effects") ? 0 : 220);
       });
       if (firstInRun) card.appendChild(el("span", "discovery-badge", "初加入"));
+      if (boardCopies > 0 || benchCopies > 0) {
+        const labels = el("div", "shop-owned-labels");
+        if (boardCopies > 0) labels.appendChild(el("span", "owned-board", `盤面 ${boardCopies}`));
+        if (benchCopies > 0) labels.appendChild(el("span", "owned-bench", `ベンチ ${benchCopies}`));
+        card.appendChild(labels);
+      }
+      if (upgradeStar) {
+        card.classList.add("shop-star-upgrade");
+        card.appendChild(el("div", "shop-upgrade-badge", `✨ 選択で★${upgradeStar}へアップ！`));
+      }
       row.appendChild(card);
     }
   };
