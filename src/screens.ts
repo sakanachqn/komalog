@@ -1205,14 +1205,6 @@ export function renderTitle(): HTMLElement {
   menuColumn.append(menu, titleSettings);
   layout.append(hero, menuColumn);
   s.appendChild(layout);
-  const bgmCredit = el("div", "title-bgm-credit");
-  bgmCredit.append("BGM: DOVA-SYNDROME ", Object.assign(document.createElement("a"), {
-    href: "https://dova-s.jp/bgm/detail/4596",
-    target: "_blank",
-    rel: "noopener noreferrer",
-    textContent: "「流るる時」by siroimu",
-  }));
-  s.appendChild(bgmCredit);
   return s;
 }
 

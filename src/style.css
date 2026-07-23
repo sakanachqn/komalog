@@ -756,16 +756,6 @@ button.primary:hover:not(:disabled) {
 .title-setting-toggle b { font-size: 12px; }
 .title-setting-toggle small { overflow: hidden; color: var(--muted); font-size: 9px; white-space: nowrap; text-overflow: ellipsis; }
 .title-setting-toggle input { width: 18px; height: 18px; flex: 0 0 auto; accent-color: var(--accent); }
-.title-bgm-credit {
-  position: absolute;
-  right: 18px;
-  bottom: 12px;
-  color: var(--muted);
-  font-size: 14px;
-  opacity: .9;
-}
-.title-bgm-credit a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
-.title-bgm-credit a:hover { color: var(--gold); opacity: 1; }
 .global-compendium-btn {
   position: fixed;
   z-index: 120;
@@ -821,7 +811,6 @@ button.primary:hover:not(:disabled) {
   animation: completeAurora 5s ease-in-out infinite alternate;
 }
 .achievement-complete-title .title-layout { position: relative; z-index: 1; }
-.achievement-complete-title .title-bgm-credit { z-index: 1; }
 .achievement-complete-title h1 {
   background: linear-gradient(100deg, #fff3a8, #f2b632, #fff8ca, #d99418);
   background-size: 220% 100%;
