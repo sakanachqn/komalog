@@ -66,6 +66,7 @@ export function loadGame(): SaveData | null {
     d.run.damageTaken ??= 0;
     d.run.ancientRelics ??= [];
     d.run.pendingAncientChoices ??= [];
+    d.run.markedNodeIds ??= [];
     // 旧セーブは所持数から第1・第2幕報酬の取得状況を推定
     d.run.ancientRewardActs ??= d.run.ancientRelics.slice(0, 2).map((_, i) => i + 1);
     d.run.carriedShopItems ??= [];
@@ -76,6 +77,20 @@ export function loadGame(): SaveData | null {
     d.run.scrap ??= 0;
     d.run.relicItemDropBonus ??= 0;
     for (const u of d.run.roster) u.hpBonus ??= 0;
+    const usedBenchSlots = new Set<number>();
+    for (const unit of d.run.roster.filter((u) => u.pos === null)) {
+      if (
+        unit.benchSlot !== undefined
+        && unit.benchSlot >= 0
+        && unit.benchSlot < 8
+        && !usedBenchSlots.has(unit.benchSlot)
+      ) {
+        usedBenchSlots.add(unit.benchSlot);
+      } else {
+        unit.benchSlot = Array.from({ length: 8 }, (_, i) => i).find((i) => !usedBenchSlots.has(i)) ?? 0;
+        usedBenchSlots.add(unit.benchSlot);
+      }
+    }
     return d;
   } catch {
     return null;

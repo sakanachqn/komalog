@@ -570,6 +570,18 @@ function traitPanel(board: OwnedUnit[]): HTMLElement {
   return p;
 }
 
+function formationCountPanel(run: RunState): HTMLElement {
+  const count = boardUnits(run).length;
+  const cap = teamCap(run);
+  const panel = el("div", `formation-count-panel${count >= cap ? " full" : ""}`);
+  panel.append(
+    el("span", "", "配置可能数"),
+    el("b", "", `${count} / ${cap}`),
+    el("small", "", count < cap ? `あと${cap - count}体配置できます` : "配置上限に到達"),
+  );
+  return panel;
+}
+
 /** プレイした感想を送るGoogleフォーム */
 const FEEDBACK_FORM_URL =
   "https://docs.google.com/forms/d/e/1FAIpQLSc9mRujMLrt2HAwvRpEVEzfcIRlMopVetpaZ19wzRN3wCr95g/viewform";
@@ -1116,6 +1128,7 @@ function withTraitSide(
   const refreshSide = () => {
     side.innerHTML = "";
     side.appendChild(traitPanel(boardUnits(run)));
+    side.appendChild(formationCountPanel(run));
   };
   refreshSide();
   root.append(content, side);
@@ -1152,7 +1165,7 @@ function formationPreview(run: RunState): HTMLElement {
   const waiting = benchUnits(run);
   for (let i = 0; i < BENCH_SIZE; i++) {
     const slot = el("div", "shop-mini-bench-slot");
-    const owned = waiting[i];
+    const owned = waiting.find((unit) => unit.benchSlot === i);
     if (owned) {
       const def = unitDef(owned);
       const piece = el("div", "shop-mini-unit preview-only");
@@ -1561,10 +1574,31 @@ export function renderMap(): HTMLElement {
     const isAvail = available.includes(n);
     const b = el("button", "map-node");
     b.textContent = NODE_META[n.type].icon;
-    b.title = NODE_META[n.type].label;
+    b.title = `${NODE_META[n.type].label}\n右クリックで目印を付ける`;
     b.style.left = `${xPct(n.col)}%`;
     b.style.top = `${yPx(n.floor)}px`;
     if (n === current) b.classList.add("current");
+    const updateMarker = () => {
+      const marked = run.markedNodeIds?.includes(n.id) ?? false;
+      b.classList.toggle("marked", marked);
+      b.querySelector(".map-node-flag")?.remove();
+      if (marked) b.appendChild(el("span", "map-node-flag", "🚩"));
+    };
+    updateMarker();
+    b.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      run.markedNodeIds ??= [];
+      if (run.markedNodeIds.includes(n.id)) {
+        run.markedNodeIds = run.markedNodeIds.filter((id) => id !== n.id);
+        sfx.ui("tap");
+      } else {
+        run.markedNodeIds.push(n.id);
+        sfx.ui("confirm");
+      }
+      updateMarker();
+      saveGame({ v: 1, run, battleSpeed: ctx.battleSpeed, resume: { kind: "map" } });
+    });
     if (isAvail) {
       b.classList.add("available");
       b.addEventListener("click", () => {
@@ -1580,7 +1614,8 @@ export function renderMap(): HTMLElement {
       });
       b.addEventListener("pointerleave", () => nodeTip.classList.remove("visible"));
     } else {
-      b.disabled = true;
+      b.classList.add("disabled");
+      b.setAttribute("aria-disabled", "true");
       if (current && n.floor <= current.floor) b.classList.add("visited");
     }
     inner.appendChild(b);
@@ -1592,6 +1627,7 @@ export function renderMap(): HTMLElement {
   for (const t of ["battle", "elite", "shop", "rest", "event", "boss"] as const) {
     legend.appendChild(el("span", "", `${NODE_META[t].icon} ${NODE_META[t].label}`));
   }
+  legend.appendChild(el("span", "map-marker-help", "🚩 右クリックで目印"));
   s.appendChild(legend);
   wrap.scrollTop = wrap.scrollHeight;
   return s;
@@ -1647,6 +1683,22 @@ export function renderPrepare(node: MapNode): HTMLElement {
   );
   s.appendChild(hint);
 
+  function clearDragHighlights() {
+    boardHolder
+      .querySelectorAll(".drop-target, .drop-invalid, .exchange-target, .range-highlight, .range-origin")
+      .forEach((node) => node.classList.remove("drop-target", "drop-invalid", "exchange-target", "range-highlight", "range-origin"));
+  }
+
+  function showRangeFrom(x: number, y: number, range: number) {
+    boardHolder.querySelectorAll<HTMLElement>(".cell").forEach((cell) => {
+      const cx = Number(cell.dataset.x);
+      const cy = Number(cell.dataset.y);
+      const distance = Math.max(Math.abs(cx - x), Math.abs(cy - y));
+      if (distance === 0) cell.classList.add("range-origin");
+      else if (distance <= range) cell.classList.add("range-highlight");
+    });
+  }
+
   /** ドラッグ＆ドロップ対応（クリック選択と共存） */
   function enableDrag(elm: HTMLElement, ou: OwnedUnit) {
     elm.addEventListener("pointerdown", (e) => {
@@ -1666,17 +1718,26 @@ export function renderPrepare(node: MapNode): HTMLElement {
         }
         ghost.style.left = `${ev.clientX}px`;
         ghost.style.top = `${ev.clientY}px`;
-        boardHolder.querySelectorAll(".drop-target, .drop-invalid, .exchange-target").forEach((node) => node.classList.remove("drop-target", "drop-invalid", "exchange-target"));
+        clearDragHighlights();
         const hover = document.elementFromPoint(ev.clientX, ev.clientY);
         const hoverUnit = hover?.closest<HTMLElement>(".unit.ally, .bench-slot[data-iid]");
         const hoverCell = hover?.closest<HTMLElement>(".cell");
         const hoverBench = hover?.closest<HTMLElement>(".bench-slot");
-        if (hoverUnit && Number(hoverUnit.dataset.iid) !== ou.iid) hoverUnit.classList.add("exchange-target");
+        if (hoverUnit && Number(hoverUnit.dataset.iid) !== ou.iid) {
+          hoverUnit.classList.add("exchange-target");
+          const exchange = run.roster.find((unit) => unit.iid === Number(hoverUnit.dataset.iid));
+          if (exchange?.pos) showRangeFrom(exchange.pos.x, exchange.pos.y, def.range);
+        }
         else if (hoverBench) hoverBench.classList.add("drop-target");
         else if (hoverCell) {
           const allyZone = Number(hoverCell.dataset.y) >= 4;
           const capBlocked = ou.pos === null && boardUnits(run).length >= teamCap(run);
           hoverCell.classList.add(allyZone && !capBlocked ? "drop-target" : "drop-invalid");
+          if (allyZone && !capBlocked) {
+            showRangeFrom(Number(hoverCell.dataset.x), Number(hoverCell.dataset.y), def.range);
+          }
+        } else if (ou.pos) {
+          showRangeFrom(ou.pos.x, ou.pos.y, def.range);
         }
       };
       const onUp = (ev: PointerEvent) => {
@@ -1686,7 +1747,7 @@ export function renderPrepare(node: MapNode): HTMLElement {
         ghost.remove();
         elm.classList.remove("dragging");
         boardHolder.querySelector(".board-wrap")?.classList.remove("unit-drag-active");
-        boardHolder.querySelectorAll(".drop-target, .drop-invalid, .exchange-target").forEach((node) => node.classList.remove("drop-target", "drop-invalid", "exchange-target"));
+        clearDragHighlights();
         justDragged = true;
         setTimeout(() => (justDragged = false), 50);
         dropAt(ou, ev.clientX, ev.clientY);
@@ -1696,13 +1757,10 @@ export function renderPrepare(node: MapNode): HTMLElement {
     });
   }
 
-  /** ベンチの指定スロット位置へ移動（ベンチの並び順＝roster内の順序を組み替える） */
+  /** ベンチの指定スロット位置へ移動。空き枠を保ったまま任意位置へ置ける。 */
   function moveToBenchSlot(ou: OwnedUnit, slotIndex: number) {
     ou.pos = null;
-    const others = run.roster.filter((u) => u.pos === null && u.iid !== ou.iid);
-    const at = Math.max(0, Math.min(slotIndex, others.length));
-    const bench = [...others.slice(0, at), ou, ...others.slice(at)];
-    run.roster = [...run.roster.filter((u) => u.pos !== null), ...bench];
+    ou.benchSlot = Math.max(0, Math.min(BENCH_SIZE - 1, slotIndex));
   }
 
   function dropAt(ou: OwnedUnit, cx: number, cy: number) {
@@ -1716,23 +1774,28 @@ export function renderPrepare(node: MapNode): HTMLElement {
       const other = run.roster.find((o) => o.iid === Number(unitEl.dataset.iid));
       if (other && other.iid !== ou.iid) {
         const tmp = ou.pos;
+        const sourceSlot = ou.benchSlot;
         ou.pos = other.pos;
         other.pos = tmp;
+        if (other.pos === null) other.benchSlot = sourceSlot;
       }
     } else if (slot) {
       if (slot.dataset.iid) {
         const other = run.roster.find((o) => o.iid === Number(slot.dataset.iid));
         if (other && other.iid !== ou.iid) {
           if (ou.pos === null && other.pos === null) {
-            // ベンチ同士 → 並び順を入れ替え
-            const ia = run.roster.indexOf(ou);
-            const ib = run.roster.indexOf(other);
-            [run.roster[ia], run.roster[ib]] = [run.roster[ib], run.roster[ia]];
+            // ベンチ同士 → スロット位置を入れ替え
+            const sourceSlot = ou.benchSlot;
+            ou.benchSlot = other.benchSlot;
+            other.benchSlot = sourceSlot;
           } else {
             // 盤面 ⇔ ベンチ → 位置を交換
             const tmp = ou.pos;
+            const sourceSlot = ou.benchSlot;
             ou.pos = other.pos;
             other.pos = tmp;
+            if (ou.pos === null) ou.benchSlot = other.benchSlot;
+            if (other.pos === null) other.benchSlot = sourceSlot ?? Number(slot.dataset.slot);
           }
         }
       } else {
@@ -1865,6 +1928,8 @@ export function renderPrepare(node: MapNode): HTMLElement {
       const def = unitDef(ou);
       const u = el("div", "unit ally");
       u.dataset.iid = String(ou.iid);
+      u.dataset.x = String(ou.pos!.x);
+      u.dataset.y = String(ou.pos!.y);
       if (ou.iid === selected) u.classList.add("selected");
       const pos = cellPos(ou.pos!.x, ou.pos!.y);
       u.style.left = pos.left;
@@ -1872,6 +1937,13 @@ export function renderPrepare(node: MapNode): HTMLElement {
       const unitIcon = el("div", "icon");
       unitIcon.appendChild(unitArt(def));
       u.append(el("div", "stars", starsText(ou.star)), unitIcon);
+      const traitIcons = el("div", "unit-trait-icons");
+      for (const trait of def.traits) {
+        const icon = synergyArt(trait);
+        icon.title = TRAITS[trait].name;
+        traitIcons.appendChild(icon);
+      }
+      u.appendChild(traitIcons);
       if (ou.item) {
         const d = ITEM_BY_ID.get(ou.item)!;
         const badge = el("div", "item-badge");
@@ -1892,7 +1964,7 @@ export function renderPrepare(node: MapNode): HTMLElement {
     for (let i = 0; i < BENCH_SIZE; i++) {
       const slot = el("div", "bench-slot");
       slot.dataset.slot = String(i);
-      const ou = bu[i];
+      const ou = bu.find((unit) => unit.benchSlot === i);
       if (ou) {
         const def = unitDef(ou);
         slot.dataset.iid = String(ou.iid);
@@ -2023,9 +2095,7 @@ export function renderPrepare(node: MapNode): HTMLElement {
 
     // ツールバー
     const bar = el("div", "toolbar");
-    const cap = teamCap(run);
     bar.append(
-      el("span", "", `配置 ${boardUnits(run).length}/${cap}`),
       (() => {
         const start = btn("⚔️ 戦闘開始", "primary", () => {
         // 盤面に空きがあればベンチの左から自動で埋める
@@ -2045,6 +2115,7 @@ export function renderPrepare(node: MapNode): HTMLElement {
 
     // サイドパネル
     side.appendChild(traitPanel(boardUnits(run)));
+    side.appendChild(formationCountPanel(run));
     const sel = run.roster.find((o) => o.iid === selected);
     if (sel) {
       side.appendChild(unitInfoPanel(
@@ -3018,6 +3089,7 @@ export function renderShop(node: MapNode, rescue = false): HTMLElement {
         reroll.dataset.shortcut = "shop-reroll";
         return reroll;
       })(),
+      el("span", "shop-reroll-balance", `💰 所持金 ${run.gold}G`),
       ...(itemRerollMax > 0
         ? [btn(`🔄 アイテム更新（残り${run.shopItemRerolls}回）`, "", () => {
             if (run.shopItemRerolls <= 0) {
@@ -3042,6 +3114,7 @@ export function renderShop(node: MapNode, rescue = false): HTMLElement {
   // ショップ内の簡易編成盤面
   const shopFormation = el("div", "panel shop-formation");
   let selectedShopUnit: number | null = null;
+  let draggedShopUnit: number | null = null;
   function refreshFormation() {
     shopFormation.innerHTML = "";
     const head = el("div", "shop-formation-head");
@@ -3054,13 +3127,20 @@ export function renderShop(node: MapNode, rescue = false): HTMLElement {
     const makeDraggable = (target: HTMLElement, iid: number) => {
       target.draggable = true;
       target.addEventListener("dragstart", (event) => {
+        draggedShopUnit = iid;
         event.dataTransfer?.setData("text/plain", String(iid));
         if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
         target.classList.add("dragging");
       });
-      target.addEventListener("dragend", () => target.classList.remove("dragging"));
+      target.addEventListener("dragend", () => {
+        target.classList.remove("dragging");
+        draggedShopUnit = null;
+      });
     };
-    const readIid = (event: DragEvent) => Number(event.dataTransfer?.getData("text/plain"));
+    const readIid = (event: DragEvent) => {
+      const transferred = Number(event.dataTransfer?.getData("text/plain"));
+      return Number.isFinite(transferred) && transferred > 0 ? transferred : draggedShopUnit;
+    };
     const allowDrop = (target: HTMLElement) => {
       target.addEventListener("dragover", (event) => {
         event.preventDefault();
@@ -3080,8 +3160,12 @@ export function renderShop(node: MapNode, rescue = false): HTMLElement {
         return;
       }
       const oldPos = source.pos ? { ...source.pos } : null;
+      const sourceBenchSlot = source.benchSlot;
       source.pos = { x, y };
-      if (target) target.pos = oldPos;
+      if (target) {
+        target.pos = oldPos;
+        if (target.pos === null) target.benchSlot = sourceBenchSlot;
+      }
       sfx.ui("tap");
       rerenderAll();
     };
@@ -3106,7 +3190,9 @@ export function renderShop(node: MapNode, rescue = false): HTMLElement {
         allowDrop(cell);
         cell.addEventListener("drop", (event) => {
           event.preventDefault();
-          moveToBoard(readIid(event), x, y);
+          event.stopPropagation();
+          const sourceIid = readIid(event);
+          if (sourceIid !== null) moveToBoard(sourceIid, x, y);
         });
         miniBoard.appendChild(cell);
       }
@@ -3117,7 +3203,7 @@ export function renderShop(node: MapNode, rescue = false): HTMLElement {
     const bench = benchUnits(run);
     for (let i = 0; i < BENCH_SIZE; i++) {
       const slot = el("div", "shop-mini-bench-slot");
-      const owned = bench[i];
+      const owned = bench.find((unit) => unit.benchSlot === i);
       if (owned) {
         const def = unitDef(owned);
         const piece = el("div", "shop-mini-unit");
@@ -3135,23 +3221,24 @@ export function renderShop(node: MapNode, rescue = false): HTMLElement {
       allowDrop(slot);
       slot.addEventListener("drop", (event) => {
         event.preventDefault();
-        const source = run.roster.find((unit) => unit.iid === readIid(event));
+        event.stopPropagation();
+        const sourceIid = readIid(event);
+        const source = run.roster.find((unit) => unit.iid === sourceIid);
         if (!source) return;
-        const target = bench[i];
+        // 空き枠を含む実スロット番号から、その時点の対象を取得する。
+        const target = run.roster.find((unit) => unit.pos === null && unit.benchSlot === i);
         if (target?.iid === source.iid) return;
         if (source.pos) {
           const oldPos = { ...source.pos };
           source.pos = null;
+          source.benchSlot = i;
           if (target) target.pos = oldPos;
         } else if (target) {
-          const sourceIndex = run.roster.indexOf(source);
-          const targetIndex = run.roster.indexOf(target);
-          [run.roster[sourceIndex], run.roster[targetIndex]] = [run.roster[targetIndex], run.roster[sourceIndex]];
+          const sourceSlot = source.benchSlot;
+          source.benchSlot = target.benchSlot;
+          target.benchSlot = sourceSlot;
         } else {
-          // 空き枠へ移した場合はベンチ列の末尾へ並べ直す。
-          const sourceIndex = run.roster.indexOf(source);
-          run.roster.splice(sourceIndex, 1);
-          run.roster.push(source);
+          source.benchSlot = i;
         }
         sfx.ui("tap");
         rerenderAll();
@@ -3454,6 +3541,7 @@ export function renderActClear(clearedAct: number): HTMLElement {
     run.floorIndex = 0;
     run.currentNodeId = null;
     run.map = generateMap();
+    run.markedNodeIds = [];
     run.actRule = rollActRule();
     go({ kind: "map" });
   };

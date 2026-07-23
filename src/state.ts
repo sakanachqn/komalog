@@ -25,6 +25,7 @@ export function newRun(starterDefIds: string[], asc = 0): RunState {
     floorIndex: 0,
     currentNodeId: null,
     map: generateMap(),
+    markedNodeIds: [],
     roster: [],
     nextIid: 1,
     battleCount: 0,
@@ -79,8 +80,32 @@ export function boardUnits(run: RunState): OwnedUnit[] {
   return run.roster.filter((u) => u.pos !== null);
 }
 
+/** 旧セーブや合成後も、ベンチスロットが重複せず0〜7へ収まるよう補正する。 */
+export function normalizeBenchSlots(run: RunState): void {
+  const used = new Set<number>();
+  for (const unit of run.roster.filter((u) => u.pos === null)) {
+    const slot = unit.benchSlot;
+    if (slot !== undefined && slot >= 0 && slot < BENCH_SIZE && !used.has(slot)) {
+      used.add(slot);
+      continue;
+    }
+    const free = Array.from({ length: BENCH_SIZE }, (_, i) => i).find((i) => !used.has(i));
+    unit.benchSlot = free ?? 0;
+    used.add(unit.benchSlot);
+  }
+}
+
+export function firstFreeBenchSlot(run: RunState): number {
+  normalizeBenchSlots(run);
+  const used = new Set(run.roster.filter((u) => u.pos === null).map((u) => u.benchSlot));
+  return Array.from({ length: BENCH_SIZE }, (_, i) => i).find((i) => !used.has(i)) ?? 0;
+}
+
 export function benchUnits(run: RunState): OwnedUnit[] {
-  return run.roster.filter((u) => u.pos === null);
+  normalizeBenchSlots(run);
+  return run.roster
+    .filter((u) => u.pos === null)
+    .sort((a, b) => (a.benchSlot ?? 0) - (b.benchSlot ?? 0));
 }
 
 export function unitDef(u: OwnedUnit): UnitDef {
@@ -94,6 +119,7 @@ export function addTwinCrownCopy(run: RunState, defId: string): boolean {
     defId,
     star: 2,
     pos: null,
+    benchSlot: firstFreeBenchSlot(run),
     item: null,
     hpBonus: 0,
   });
@@ -121,7 +147,14 @@ export function addUnit(run: RunState, def: UnitDef): boolean {
   }));
   const itemsBefore = [...run.items];
   const nextIidBefore = run.nextIid;
-  const u: OwnedUnit = { iid: run.nextIid++, defId: def.id, star: 1, pos: null, item: null };
+  const u: OwnedUnit = {
+    iid: run.nextIid++,
+    defId: def.id,
+    star: 1,
+    pos: null,
+    benchSlot: firstFreeBenchSlot(run),
+    item: null,
+  };
   run.roster.push(u);
   tryMerge(run, def.id);
   if (benchUnits(run).length > BENCH_SIZE) {
@@ -158,6 +191,7 @@ function tryMerge(run: RunState, defId: string) {
             defId,
             star: 2,
             pos: null,
+            benchSlot: firstFreeBenchSlot(run),
             item: null,
             hpBonus: 0,
           });

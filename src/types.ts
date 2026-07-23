@@ -117,6 +117,8 @@ export interface OwnedUnit {
   star: 1 | 2 | 3;
   /** 盤面配置位置（null ならベンチ） */
   pos: { x: number; y: number } | null;
+  /** ベンチ上の任意配置スロット。旧セーブでは読み込み時に補完する */
+  benchSlot?: number;
   /** 装備アイテムID（1枠） */
   item: string | null;
   /** 解体屋によるラン中の永続最大HP強化 */
@@ -145,6 +147,8 @@ export interface RunState {
   floorIndex: number; // 次に挑む（今いる）フロア
   currentNodeId: number | null;
   map: MapNode[];
+  /** ルート検討用に旗を立てたマスID */
+  markedNodeIds?: number[];
   roster: OwnedUnit[];
   nextIid: number;
   battleCount: number;
