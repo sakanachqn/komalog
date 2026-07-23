@@ -7,6 +7,10 @@ export interface TraitInfo {
   icon: string;
   thresholds: number[];
   desc: (tier: number) => string;
+  detail?: {
+    title: string;
+    lines: string[];
+  };
 }
 
 export const TRAITS: Record<TraitId, TraitInfo> = {
@@ -77,7 +81,21 @@ export const TRAITS: Record<TraitId, TraitInfo> = {
   clockwork: { id: "clockwork", name: "時計仕掛け", icon: "⚙️", thresholds: [2, 4, 6], desc: (t) => `開幕${[0, 1, 1.5, 2][t]}秒、時計仕掛け以外を停止。停止中の与ダメージ50%` },
   parasite: { id: "parasite", name: "寄生虫", icon: "🪱", thresholds: [2, 3, 4], desc: (t) => `死亡時に寄生し毎秒最大HP${[0, 1.5, 2, 3][t]}%ダメージ。最大${[0, 1, 2, 3][t]}回伝染` },
   gravity: { id: "gravity", name: "重力使い", icon: "🪐", thresholds: [2, 4, 6], desc: (t) => `${[0, 8, 6, 4][t]}秒ごとに敵を中央へ引き寄せ、衝突時スタン` },
-  alchemist: { id: "alchemist", name: "錬金術師", icon: "⚗️", thresholds: [2, 3, 4], desc: (t) => `勝利時、生存者から最大${[0, 1, 2, 3][t]}個のポーションを生成（所持上限3）` },
+  alchemist: {
+    id: "alchemist",
+    name: "錬金術師",
+    icon: "⚗️",
+    thresholds: [2, 3, 4],
+    desc: (t) => `勝利時、生存者から最大${[0, 1, 2, 3][t]}個のポーションを生成（所持上限3）`,
+    detail: {
+      title: "ポーション効果",
+      lines: [
+        "力：次の戦闘で味方全員の攻撃力+12%",
+        "守り：次の戦闘で味方全員の最大HP+12%",
+        "マナ：次の戦闘で味方全員の開始マナ+20",
+      ],
+    },
+  },
   gambler: { id: "gambler", name: "賭博師", icon: "🎲", thresholds: [2, 3, 4], desc: (t) => `開幕コイントス。表: クリ率+${[0, 25, 40, 55][t]}%。裏: ${[0, 2, 1.5, 1][t]}秒スキル使用不可` },
   ghost: { id: "ghost", name: "亡霊", icon: "👻", thresholds: [2, 3, 4], desc: (t) => `戦闘中1回、HP${[0, 20, 25, 30][t]}%の霊体で${[0, 4, 6, 8][t]}秒復活。霊体中は被ダメージ無効` },
   doppelganger: { id: "doppelganger", name: "ドッペルゲンガー", icon: "🪞", thresholds: [2, 3, 4], desc: (t) => `敵最高攻撃力ユニットのスキルを${[0, 70, 85, 100][t]}%威力でコピー` },

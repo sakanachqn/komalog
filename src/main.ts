@@ -33,7 +33,7 @@ document.addEventListener("keydown", (event) => {
   if (target?.matches("input, textarea, select") || target?.isContentEditable) return;
   if (event.key === "Escape") {
     const overlay = [...document.querySelectorAll<HTMLElement>(".modal-overlay")].at(-1);
-    if (overlay) { event.preventDefault(); overlay.remove(); }
+    if (overlay && overlay.dataset.nonDismissable !== "true") { event.preventDefault(); overlay.remove(); }
     return;
   }
   if (document.querySelector(".modal-overlay")) return;

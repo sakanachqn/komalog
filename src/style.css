@@ -713,7 +713,22 @@ button.primary:hover:not(:disabled) {
 .unit-entry.undiscovered { filter: grayscale(.8); opacity: .65; min-height: 105px; }
 .relic-entry.undiscovered { filter: grayscale(1); opacity: .58; }
 .relic-entry.undiscovered .compendium-icon { filter: none; }
-.trait-level-list { display: grid; gap: 4px; color: #d9e5f2; }
+.trait-level-list { display: grid; gap: 4px; color: #4c3929; font-weight: 600; }
+.trait-detail-note {
+  display: grid;
+  grid-column: 1 / 3;
+  gap: 3px;
+  margin-top: 8px;
+  padding: 8px 9px;
+  color: #4c3929;
+  background: rgba(255, 244, 207, .42);
+  border: 1px solid rgba(112, 76, 38, .24);
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.trait-detail-note b { color: #704719; }
+.trait-detail-note span { display: block; }
 .compendium-section-title { margin: 6px 0 10px; color: var(--gold); }
 .compendium-section-title:not(:first-child) { margin-top: 22px; }
 .recipe { color: #8fd9ff; }
@@ -2936,4 +2951,106 @@ button.danger { background: linear-gradient(135deg, #a45b4d, #743d36); border-co
   width: 1em;
   height: 1em;
   vertical-align: 0;
+}
+
+/* 全実績解除：通常の金色テーマと明確に差が出るプリズム演出 */
+.achievement-complete-title {
+  background:
+    radial-gradient(circle at 8% 20%, rgba(255, 45, 125, .25), transparent 29%),
+    radial-gradient(circle at 92% 18%, rgba(32, 211, 255, .26), transparent 31%),
+    radial-gradient(circle at 18% 86%, rgba(112, 255, 92, .2), transparent 30%),
+    radial-gradient(circle at 82% 82%, rgba(159, 71, 255, .25), transparent 32%),
+    linear-gradient(125deg, #181226, #12243a 28%, #26143a 55%, #102d2d 78%, #181226);
+  background-size: 140% 140%;
+  animation: completeGamingBackdrop 9s ease-in-out infinite alternate;
+}
+.achievement-complete-title::before {
+  background:
+    radial-gradient(circle, rgba(255, 82, 178, .95) 0 1.5px, transparent 2.5px) 0 0 / 79px 79px,
+    radial-gradient(circle, rgba(68, 222, 255, .9) 0 1.5px, transparent 2.5px) 29px 13px / 113px 113px,
+    radial-gradient(circle, rgba(125, 255, 106, .82) 0 1px, transparent 2px) 9px 41px / 61px 61px,
+    radial-gradient(circle, rgba(191, 104, 255, .86) 0 1.5px, transparent 2.5px) 53px 37px / 137px 137px;
+  mask-image: radial-gradient(ellipse at center, #000 30%, transparent 82%);
+  animation: completeStarDrift 18s linear infinite, completePrismPulse 4s ease-in-out infinite alternate;
+}
+.achievement-complete-title::after {
+  inset: -20%;
+  background:
+    conic-gradient(from 0deg at 50% 50%,
+      transparent 0deg,
+      rgba(255, 51, 153, .1) 45deg,
+      transparent 90deg,
+      rgba(44, 215, 255, .1) 145deg,
+      transparent 190deg,
+      rgba(122, 255, 83, .08) 245deg,
+      transparent 290deg,
+      rgba(174, 75, 255, .1) 335deg,
+      transparent 360deg);
+  animation: completePrismSpin 24s linear infinite;
+}
+.achievement-complete-title h1 {
+  background: linear-gradient(
+    90deg,
+    #ff5c9f 0%,
+    #ff9b5f 18%,
+    #f2dc58 34%,
+    #63d98a 50%,
+    #56bfe8 68%,
+    #9277e8 84%,
+    #e56fca 100%
+  );
+  background-size: 100% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter:
+    drop-shadow(0 2px 2px rgba(17, 8, 30, .82))
+    drop-shadow(0 0 8px rgba(104, 205, 255, .38));
+  animation: none;
+}
+.achievement-complete-title .title-menu,
+.achievement-complete-title .title-settings-panel {
+  border-color: rgba(93, 224, 255, .8);
+  box-shadow:
+    0 0 0 1px rgba(255, 83, 185, .32),
+    0 0 18px rgba(68, 210, 255, .28),
+    0 18px 50px rgba(0, 0, 0, .34);
+  animation: completePanelGlow 4s ease-in-out infinite alternate;
+}
+.achievement-complete-title .title-complete-badge {
+  color: #fff;
+  background: linear-gradient(90deg, rgba(255, 55, 157, .75), rgba(55, 199, 255, .75), rgba(105, 236, 105, .75), rgba(159, 74, 255, .75), rgba(255, 55, 157, .75));
+  background-size: 300% 100%;
+  border-color: rgba(255, 255, 255, .72);
+  box-shadow: 0 0 16px rgba(76, 214, 255, .45);
+  text-shadow: 0 1px 2px rgba(24, 9, 39, .9);
+  animation: completeRainbowText 5s linear infinite;
+}
+@keyframes completeGamingBackdrop {
+  from { background-position: 0% 20%; }
+  to { background-position: 100% 80%; }
+}
+@keyframes completePrismPulse {
+  from { opacity: .55; }
+  to { opacity: 1; }
+}
+@keyframes completePrismSpin {
+  to { transform: rotate(360deg); }
+}
+@keyframes completeRainbowText {
+  to { background-position: -420% 0; }
+}
+@keyframes completePanelGlow {
+  from { border-color: rgba(73, 220, 255, .82); box-shadow: 0 0 0 1px rgba(255, 78, 175, .25), 0 0 14px rgba(66, 214, 255, .24), 0 18px 50px rgba(0,0,0,.34); }
+  to { border-color: rgba(255, 85, 190, .82); box-shadow: 0 0 0 1px rgba(110, 255, 121, .28), 0 0 24px rgba(183, 82, 255, .34), 0 18px 50px rgba(0,0,0,.34); }
+}
+.reduce-effects .achievement-complete-title,
+.reduce-effects .achievement-complete-title::before,
+.reduce-effects .achievement-complete-title::after,
+.reduce-effects .achievement-complete-title h1,
+.reduce-effects .achievement-complete-title .title-menu,
+.reduce-effects .achievement-complete-title .title-settings-panel,
+.reduce-effects .achievement-complete-title .title-complete-badge {
+  animation: none;
 }

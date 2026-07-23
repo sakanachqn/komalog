@@ -72,7 +72,10 @@ function tooltipHtml(target: HTMLElement): string | null {
     const levels = info.thresholds
       .map((threshold, index) => `<div class="${index + 1 === tier ? "current" : ""}">&lt;${threshold}体&gt; ${info.desc(index + 1)}</div>`)
       .join("");
-    return `<b>${info.icon} ${info.name}</b><small class="trait-threshold-label">発動閾値: ${info.thresholds.join(" / ")}</small><div class="hover-trait-levels">${levels}</div>`;
+    const detail = info.detail
+      ? `<div class="trait-detail-note"><b>${info.detail.title}</b>${info.detail.lines.map((line) => `<span>${line}</span>`).join("")}</div>`
+      : "";
+    return `<b>${info.icon} ${info.name}</b><small class="trait-threshold-label">発動閾値: ${info.thresholds.join(" / ")}</small><div class="hover-trait-levels">${levels}</div>${detail}`;
   }
 
   const enemyTarget = target.closest<HTMLElement>("[data-hover-name]");

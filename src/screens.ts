@@ -24,6 +24,8 @@ import {
   BENCH_SIZE,
   BOARD_COLS,
   BOARD_ROWS,
+  addAncientRelic,
+  addTwinCrownCopy,
   addUnit,
   autoPlace,
   benchUnits,
@@ -80,16 +82,23 @@ function purchaseStarUpgrade(run: RunState, defId: string): 2 | 3 | null {
   return star2 >= 2 ? 3 : 2;
 }
 
-function showRewardBenchSale(def: UnitDef, onReceived: () => void): void {
+function showRewardBenchSale(
+  def: UnitDef,
+  onReceived: () => void,
+  addReward: (run: RunState, def: UnitDef) => boolean = addUnit,
+  rewardLabel = `${def.name} を迎えるため`,
+  dismissable = true,
+): void {
   if (document.querySelector(".reward-sale-overlay")) return;
   const run = ctx.run!;
   const overlay = el("div", "modal-overlay reward-sale-overlay");
   const panel = el("div", "modal-panel reward-sale-panel");
   const head = el("div", "modal-head");
-  head.append(el("h2", "", "🪑 ベンチがいっぱいです"), btn("✕", "modal-close", () => overlay.remove()));
+  head.appendChild(el("h2", "", "🪑 ベンチがいっぱいです"));
+  if (dismissable) head.appendChild(btn("✕", "modal-close", () => overlay.remove()));
   panel.append(
     head,
-    el("div", "reward-pending", `${def.icon} ${def.name} を迎えるため、ベンチのユニットを1体売却してください。`),
+    el("div", "reward-pending", `${def.icon} ${rewardLabel}、ベンチのユニットを1体売却してください。`),
   );
   const list = el("div", "reward-sale-list");
   for (const owned of benchUnits(run)) {
@@ -102,7 +111,7 @@ function showRewardBenchSale(def: UnitDef, onReceived: () => void): void {
       identity,
       btn(`売却して受取 (+${value}G)`, "danger", () => {
         sellUnit(run, owned.iid);
-        if (!addUnit(run, def)) return;
+        if (!addReward(run, def)) return;
         sfx.coin();
         overlay.remove();
         onReceived();
@@ -110,9 +119,30 @@ function showRewardBenchSale(def: UnitDef, onReceived: () => void): void {
     );
     list.appendChild(card);
   }
-  panel.append(list, btn("報酬選択に戻る", "", () => overlay.remove()));
+  panel.appendChild(list);
+  if (dismissable) panel.appendChild(btn("報酬選択に戻る", "", () => overlay.remove()));
+  else overlay.dataset.nonDismissable = "true";
   overlay.appendChild(panel);
   document.body.appendChild(overlay);
+}
+
+function resolveTwinCrownCopies(defIds: string[], onComplete: () => void): void {
+  const remaining = [...defIds];
+  const next = () => {
+    const defId = remaining.shift();
+    if (!defId) { onComplete(); return; }
+    const def = UNIT_BY_ID.get(defId);
+    if (!def) { next(); return; }
+    if (addTwinCrownCopy(ctx.run!, defId)) { next(); return; }
+    showRewardBenchSale(
+      def,
+      next,
+      (run) => addTwinCrownCopy(run, defId),
+      `双頭の王冠で ${def.name} ★★を複製するため`,
+      false,
+    );
+  };
+  next();
 }
 
 function showAbandonConfirm(onConfirm: () => void): void {
@@ -807,6 +837,12 @@ export function showCompendium(initialTab: CompendiumTab = "units") {
         levels.appendChild(el("div", "", `<${threshold}体> ${trait.desc(i + 1)}`));
       });
       card.appendChild(levels);
+      if (trait.detail) {
+        const detail = el("div", "trait-detail-note");
+        detail.appendChild(el("b", "", trait.detail.title));
+        for (const line of trait.detail.lines) detail.appendChild(el("span", "", line));
+        card.appendChild(detail);
+      }
       grid.appendChild(card);
     }
     body.appendChild(grid);
@@ -1426,9 +1462,9 @@ function showStartAncientPick(s: HTMLElement, onComplete: () => void): void {
     const card = el("button", "option-card ancient-card");
     card.innerHTML = `<span class="icon">${relic.icon}</span><b>${relic.name}</b><br><span>${relic.desc}</span>`;
     card.addEventListener("click", () => {
-      run.ancientRelics.push(relic.id);
+      const pendingCopies = addAncientRelic(run, relic.id);
       sfx.craft();
-      onComplete();
+      resolveTwinCrownCopies(pendingCopies, onComplete);
     });
     row.appendChild(card);
   }
@@ -3445,12 +3481,14 @@ export function renderActClear(clearedAct: number): HTMLElement {
         const card = el("button", "option-card ancient-card");
         card.innerHTML = `<span class="icon">${relic.icon}</span><b>${relic.name}</b><br><span>${relic.desc}</span>`;
         card.addEventListener("click", () => {
-          run.ancientRelics.push(relic.id);
+          const pendingCopies = addAncientRelic(run, relic.id);
           run.ancientRewardActs.push(clearedAct);
           run.pendingAncientChoices = [];
-          persist();
           sfx.craft();
-          render();
+          resolveTwinCrownCopies(pendingCopies, () => {
+            persist();
+            render();
+          });
         });
         row.appendChild(card);
       }

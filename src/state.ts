@@ -87,14 +87,48 @@ export function unitDef(u: OwnedUnit): UnitDef {
   return UNIT_BY_ID.get(u.defId)!;
 }
 
+export function addTwinCrownCopy(run: RunState, defId: string): boolean {
+  if (benchUnits(run).length >= BENCH_SIZE) return false;
+  run.roster.push({
+    iid: run.nextIid++,
+    defId,
+    star: 2,
+    pos: null,
+    item: null,
+    hpBonus: 0,
+  });
+  return true;
+}
+
+/** 古代レリックを付与し、双頭の王冠なら取得前からいる★3も補填する。 */
+export function addAncientRelic(run: RunState, relicId: string): string[] {
+  if (run.ancientRelics.includes(relicId)) return [];
+  run.ancientRelics.push(relicId);
+  if (relicId !== "twinCrown") return [];
+  const existingStar3 = [...new Set(run.roster.filter((unit) => unit.star === 3).map((unit) => unit.defId))];
+  const pending: string[] = [];
+  for (const defId of existingStar3) {
+    if (!addTwinCrownCopy(run, defId)) pending.push(defId);
+  }
+  return pending;
+}
+
 /** ユニットを追加し、3体揃ったら自動で星アップ。ベンチ超過なら false */
 export function addUnit(run: RunState, def: UnitDef): boolean {
+  const rosterBefore = run.roster.map((owned) => ({
+    ...owned,
+    pos: owned.pos ? { ...owned.pos } : null,
+  }));
+  const itemsBefore = [...run.items];
+  const nextIidBefore = run.nextIid;
   const u: OwnedUnit = { iid: run.nextIid++, defId: def.id, star: 1, pos: null, item: null };
   run.roster.push(u);
   tryMerge(run, def.id);
   if (benchUnits(run).length > BENCH_SIZE) {
-    // あふれた場合は追加を取り消す
-    run.roster = run.roster.filter((x) => x.iid !== u.iid);
+    // 星アップや双頭の王冠による複製も含め、追加前の状態へ完全に戻す。
+    run.roster = rosterBefore;
+    run.items = itemsBefore;
+    run.nextIid = nextIidBefore;
     return false;
   }
   return true;
@@ -115,7 +149,20 @@ function tryMerge(run: RunState, defId: string) {
       for (const r of remove) if (r.item) run.items.push(r.item);
       run.roster = run.roster.filter((u) => !remove.includes(u));
       keep.star = (star + 1) as 2 | 3;
-      if (keep.star === 3) grantUnlock("first_star3");
+      if (keep.star === 3) {
+        grantUnlock("first_star3");
+        if (run.ancientRelics.includes("twinCrown")) {
+          // ★3と同種を並べて双頭の王冠を発動できるよう、装備なしの★2をベンチへ生成する。
+          run.roster.push({
+            iid: run.nextIid++,
+            defId,
+            star: 2,
+            pos: null,
+            item: null,
+            hpBonus: 0,
+          });
+        }
+      }
       tryMerge(run, defId);
     }
   }

@@ -348,6 +348,42 @@ export function buildAllyUnit(
         cu.atk = Math.round(cu.atk * mult);
       }
       if (hasAncient("shadowCrown") && def.traits.includes("assassin")) cu.critMult = 2.3;
+      if (hasAncient("warriorWarBanner") && def.traits.includes("warrior")) {
+        cu.atk = Math.round(cu.atk * 1.25);
+        cu.armor += 30;
+      }
+      if (hasAncient("priestCenser") && def.traits.includes("priest")) {
+        cu.spellPower += 50;
+        cu.maxMana = Math.max(20, Math.round(cu.maxMana * 0.8));
+        cu.mana = Math.min(cu.mana, cu.maxMana - 1);
+      }
+      if (hasAncient("undeadSeal") && def.traits.includes("undead")) {
+        cu.atk = Math.round(cu.atk * 1.2);
+        cu.undeadBonus *= 1.5;
+      }
+      if (hasAncient("spiritDew") && def.traits.includes("spirit")) {
+        cu.mana = Math.min(cu.maxMana - 1, cu.mana + 35);
+        cu.manaGainMult *= 1.35;
+      }
+      if (hasAncient("resonanceChalice") && def.traits.includes("resonator")) cu.spellPower += 25;
+      if (hasAncient("parasiteBrood") && def.traits.includes("parasite")) {
+        scaleHp(1.2);
+      }
+      if (hasAncient("gravityLens") && def.traits.includes("gravity")) {
+        cu.spellPower += 40;
+        cu.armor += 20;
+      }
+      if (hasAncient("constellationAtlas") && constellationTier > 0) {
+        const aligned = run.roster.some((x) => {
+          const xd = UNIT_BY_ID.get(x.defId)!;
+          return x.pos && xd.traits.includes("constellation") && (x.pos.x === u.pos?.x || x.pos.y === u.pos?.y);
+        });
+        if (aligned) {
+          cu.mana = Math.min(cu.maxMana - 1, cu.mana + 25);
+          cu.atk = Math.round(cu.atk * 1.15);
+          cu.spellPower += 15;
+        }
+      }
       if (hasAncient("starEaterScale") && u.star < 3) {
         const mult = u.star === 1 ? 1.45 : 1.2;
         scaleHp(mult); cu.atk = Math.round(cu.atk * mult); cu.spellPower += Math.round((mult - 1) * 100);
@@ -458,6 +494,8 @@ export class Battle {
     this.dismantlerTier = tierOf("dismantler");
     this.openingStopTicks = [0, 10, 15, 20][tierOf("clockwork")];
     this.gravityInterval = [0, 80, 60, 40][tierOf("gravity")];
+    if (this.openingStopTicks > 0 && run.ancientRelics.includes("clockworkMainspring")) this.openingStopTicks += 10;
+    if (this.gravityInterval > 0 && run.ancientRelics.includes("gravityLens")) this.gravityInterval = Math.max(10, this.gravityInterval - 10);
 
     for (const u of board) {
       this.units.push(buildAllyUnit(run, u, traits, this.nextUid++));
@@ -497,6 +535,7 @@ export class Battle {
     }
     // 僧侶: 味方全体リジェネ（毎秒、最大HP比）
     this.allyRegen = [0, 0.01, 0.02, 0.035][tierOf("priest")];
+    if (this.allyRegen > 0 && hasAncient("priestCenser")) this.allyRegen *= 1.5;
 
     const { spawns, scale } = team;
     // アセンション + 幕の掟による敵強化
@@ -582,14 +621,18 @@ export class Battle {
       if (source?.skill) for (const u of this.units.filter((x) => x.side === "ally" && x.traits.includes("doppelganger"))) {
         u.skill = { ...source.skill };
         u.maxMana = source.skill.mana;
-        u.skillPowerMult = [0, 0.7, 0.85, 1][doppelTier];
+        u.skillPowerMult = [0, 0.7, 0.85, 1][doppelTier] + (hasAncient("doppelPrism") ? 0.3 : 0);
+        if (hasAncient("doppelPrism")) u.mana = Math.min(u.maxMana - 1, u.mana + 30);
       }
     }
     // 指揮官: 自身は行動せず、開幕時に最も最大HPが低い味方を指揮
     const commanderTier = tierOf("commander");
     if (commanderTier > 0) {
-      const target = this.units.filter((u) => u.side === "ally" && !u.traits.includes("commander")).sort((a, b) => a.maxHp - b.maxHp)[0];
-      if (target) {
+      const targets = this.units
+        .filter((u) => u.side === "ally" && !u.traits.includes("commander"))
+        .sort((a, b) => a.maxHp - b.maxHp)
+        .slice(0, hasAncient("commanderBaton") ? 2 : 1);
+      for (const target of targets) {
         const bonus = [0, 0.5, 0.9, 1.4][commanderTier];
         target.atkSpeed *= 1 + bonus;
         target.manaGainMult *= 1 + bonus;
@@ -599,26 +642,30 @@ export class Battle {
     const gamblerTier = tierOf("gambler");
     if (gamblerTier > 0) {
       if (Math.random() < 0.5) for (const u of this.units.filter((x) => x.side === "ally")) u.critChance += [0, 0.25, 0.4, 0.55][gamblerTier];
-      else this.allySilenceTicks = [0, 20, 15, 10][gamblerTier];
+      else if (hasAncient("gamblerGoldenCoin")) {
+        for (const u of this.units.filter((x) => x.side === "ally")) u.mana = Math.min(u.maxMana - 1, u.mana + 25);
+      } else this.allySilenceTicks = [0, 20, 15, 10][gamblerTier];
     }
     // 道化師: 通常戦は位置交換、ボス戦は同じ段階数の分身で攻撃を無効化
     const jesterTier = tierOf("jester");
     if (jesterTier > 0) {
       const allJesters = this.units.filter((u) => u.side === "ally" && u.traits.includes("jester"));
       if (nodeType === "boss") {
-        for (const jester of allJesters) jester.decoyCharges += jesterTier;
+        for (const jester of allJesters) jester.decoyCharges += jesterTier + (hasAncient("jesterCarnival") ? 2 : 0);
       } else {
         const jesters = allJesters.slice(0, jesterTier);
         const enemies = this.units.filter((u) => u.side === "enemy").sort(() => Math.random() - 0.5);
         jesters.forEach((j, i) => { const e = enemies[i]; if (e) [j.x, e.x, j.y, e.y] = [e.x, j.x, e.y, j.y]; });
+        if (hasAncient("jesterCarnival")) for (const jester of allJesters) jester.decoyCharges += 2;
       }
     }
     // 前戦で作ったポーションを自動使用
     for (const potion of run.potions.splice(0)) {
       for (const u of this.units.filter((x) => x.side === "ally")) {
-        if (potion === "might") u.atk = Math.round(u.atk * 1.12);
-        if (potion === "guard") { u.maxHp = Math.round(u.maxHp * 1.12); u.hp = u.maxHp; }
-        if (potion === "mana") u.mana = Math.min(u.maxMana - 1, u.mana + 20);
+        const empowered = hasAncient("alchemyStone");
+        if (potion === "might") u.atk = Math.round(u.atk * (empowered ? 1.2 : 1.12));
+        if (potion === "guard") { u.maxHp = Math.round(u.maxHp * (empowered ? 1.2 : 1.12)); u.hp = u.maxHp; }
+        if (potion === "mana") u.mana = Math.min(u.maxMana - 1, u.mana + (empowered ? 35 : 20));
       }
     }
   }
@@ -629,15 +676,18 @@ export class Battle {
     this.rewardsSettled = true;
     const notes: string[] = [];
     if (won && this.alchemistTier > 0) {
+      const empowered = run.ancientRelics.includes("alchemyStone");
       const survivors = this.units.filter((u) => u.alive && u.side === "ally" && u.traits.includes("alchemist")).length;
-      const n = Math.min(this.alchemistTier, survivors, 3 - run.potions.length);
+      const potionCap = empowered ? 4 : 3;
+      const n = Math.min(this.alchemistTier + (empowered ? 1 : 0), survivors + (empowered ? 1 : 0), potionCap - run.potions.length);
       const pool = ["might", "guard", "mana"];
       for (let i = 0; i < n; i++) run.potions.push(pool[Math.floor(Math.random() * pool.length)]);
       if (n > 0) notes.push(`ポーション +${n}`);
     }
     run.scrap += this.scrapGained;
-    while (run.scrap >= 5 && run.roster.length > 0) {
-      run.scrap -= 5;
+    const scrapCost = run.ancientRelics.includes("dismantlerFurnace") ? 4 : 5;
+    while (run.scrap >= scrapCost && run.roster.length > 0) {
+      run.scrap -= scrapCost;
       const target = run.roster[Math.floor(Math.random() * run.roster.length)];
       target.hpBonus = (target.hpBonus ?? 0) + 50;
       notes.push(`${UNIT_BY_ID.get(target.defId)!.name} 最大HP+50`);
@@ -1395,7 +1445,8 @@ export class Battle {
     }
     // 共鳴追撃はマナを消費せず、さらに共鳴を起こさない
     if (!isEcho && this.resonatorTier > 0 && u.traits.includes("resonator")) {
-      const echoScale = [0, 0.35, 0.5, 0.65][this.resonatorTier];
+      const echoScale = [0, 0.35, 0.5, 0.65][this.resonatorTier]
+        + (this.runRef.ancientRelics.includes("resonanceChalice") ? 0.2 : 0);
       const echoes = this.units.filter(
         (e) => e.alive && e.uid !== u.uid && e.side === u.side && e.traits.includes("resonator") && !e.traits.includes("commander") && Math.max(Math.abs(e.x - u.x), Math.abs(e.y - u.y)) <= 1,
       );
@@ -1539,9 +1590,11 @@ export class Battle {
       const pact = this.units.filter((u) => u.alive && u.side === target.side && u.traits.includes("bloodpact"));
       if (pact.length > 1) {
         let total = 0;
+        const empowered = this.runRef.ancientRelics.includes("bloodMoonHeart");
+        const sharedRaw = raw * (empowered ? 0.75 : 1);
         for (const member of pact) {
-          total += this.dealDamage(src, member, raw / pact.length, kind, crit, true);
-          if (member.alive) member.mana = Math.min(member.maxMana, member.mana + [0, 2, 3, 4][this.bloodpactTier]);
+          total += this.dealDamage(src, member, sharedRaw / pact.length, kind, crit, true);
+          if (member.alive) member.mana = Math.min(member.maxMana, member.mana + [0, 2, 3, 4][this.bloodpactTier] + (empowered ? 2 : 0));
         }
         return total;
       }
@@ -1567,7 +1620,9 @@ export class Battle {
     } else if (kind === "magic" && src.itemId === "staff_claw") {
       crit = src.itemGuaranteedCrit || Math.random() < src.critChance;
     }
-    if (this.openingStopTicks > 0 && this.ticks <= this.openingStopTicks && src.traits.includes("clockwork")) dmg *= 0.5;
+    if (this.openingStopTicks > 0 && this.ticks <= this.openingStopTicks && src.traits.includes("clockwork")) {
+      dmg *= this.runRef.ancientRelics.includes("clockworkMainspring") ? 0.8 : 0.5;
+    }
     if (kind === "physical") {
       const armorPen = src.itemId === "sword2" ? 0.35 : 0;
       dmg *= 100 / (100 + target.armor * (1 - armorPen));
@@ -1601,7 +1656,10 @@ export class Battle {
       this.dealDamage(target, src, dmg * 0.2, "physical", false, true);
     }
     if (src.itemId === "staff_blade" && kind === "magic" && dmg > 0) this.itemHeal(src, dmg * 0.2);
-    if (src.ghostTicks > 0 && src.alive) src.hp = Math.min(src.maxHp, src.hp + Math.round(dmg * 0.2));
+    if (src.ghostTicks > 0 && src.alive) {
+      const drain = this.runRef.ancientRelics.includes("ghostLantern") ? 0.35 : 0.2;
+      src.hp = Math.min(src.maxHp, src.hp + Math.round(dmg * drain));
+    }
     if (target.hp <= 0) {
       target.hp = 0;
       this.finishDeath(target, src);
@@ -1624,7 +1682,8 @@ export class Battle {
   }
 
   private recordScrap(target: CombatUnit, kind: "shield" | "armor") {
-    const cap = [0, 2, 4, 6][this.dismantlerTier];
+    const cap = [0, 2, 4, 6][this.dismantlerTier]
+      + (this.runRef.ancientRelics.includes("dismantlerFurnace") ? 3 : 0);
     const key = `${target.uid}:${kind}`;
     if (cap <= 0 || this.scrapGained >= cap || target.side !== "enemy" || this.scrappedTargets.has(key)) return;
     this.scrappedTargets.add(key);
@@ -1633,7 +1692,8 @@ export class Battle {
 
   private applyParasite(target: CombatUnit, splits: number) {
     if (!target.alive || target.parasitePct > 0) return;
-    target.parasitePct = [0, 0.015, 0.02, 0.03][this.parasiteTier];
+    target.parasitePct = [0, 0.015, 0.02, 0.03][this.parasiteTier]
+      * (this.runRef.ancientRelics.includes("parasiteBrood") ? 1.5 : 1);
     target.parasiteSplits = splits;
     this.floats.push({ x: target.x, y: target.y, text: "🪱寄生", cls: "poison" });
   }
@@ -1654,7 +1714,8 @@ export class Battle {
     }
     if (this.ghostTier > 0 && target.traits.includes("ghost") && !target.ghostRevived) {
       target.ghostRevived = true;
-      target.ghostTicks = [0, 40, 60, 80][this.ghostTier];
+      target.ghostTicks = [0, 40, 60, 80][this.ghostTier]
+        + (this.runRef.ancientRelics.includes("ghostLantern") ? 30 : 0);
       target.hp = Math.max(1, Math.round(target.maxHp * [0, 0.2, 0.25, 0.3][this.ghostTier]));
       target.shield = 0;
       this.floats.push({ x: target.x, y: target.y, text: "👻霊体", cls: "heal" });
@@ -1695,7 +1756,8 @@ export class Battle {
     // 寄生虫本人の死亡で最寄りの敵へ。寄生先死亡時は最大2体へ伝染
     if (this.parasiteTier > 0 && target.traits.includes("parasite")) {
       const nearest = this.units.filter((u) => u.alive && u.side !== target.side).sort((a, b) => chebDistance(a, target) - chebDistance(b, target))[0];
-      if (nearest) this.applyParasite(nearest, [0, 1, 2, 3][this.parasiteTier]);
+      const extraSplits = this.runRef.ancientRelics.includes("parasiteBrood") ? 1 : 0;
+      if (nearest) this.applyParasite(nearest, [0, 1, 2, 3][this.parasiteTier] + extraSplits);
     }
     if (target.parasitePct > 0 && target.parasiteSplits > 0) {
       const next = this.units.filter((u) => u.alive && u.side === target.side && u.parasitePct <= 0).sort((a, b) => chebDistance(a, target) - chebDistance(b, target)).slice(0, 2);
