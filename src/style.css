@@ -314,6 +314,25 @@ button.primary:hover:not(:disabled) {
   opacity: 1;
 }
 
+/* 中世テーマでは本文が濃色なので、遊び方のシナジー例を明るい札にする。 */
+.help-body .help-example {
+  color: #3f2c1f;
+  background: #f5e2b8;
+  border: 2px solid #94683a;
+  box-shadow: inset 0 0 0 1px rgba(255,248,218,.55);
+}
+.help-body .help-example .th {
+  color: #806b52;
+  opacity: 1;
+}
+.help-body .help-example .th.reached {
+  color: #35653d;
+  background: #d6e2a9;
+  padding: 1px 4px;
+  border: 1px solid #66834a;
+  border-radius: 4px;
+}
+
 /* ===== メタ進行（アセンション・実績・記録） ===== */
 .unlock-toast-stack {
   position: fixed;
