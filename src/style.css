@@ -993,6 +993,28 @@ button.primary:hover:not(:disabled) {
   flex-wrap: wrap;
 }
 .prepare-board-column { position: relative; }
+.prepare-left-rail {
+  position: absolute;
+  top: 0;
+  right: calc(100% + 14px);
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 220px;
+  max-height: min(720px, calc(100vh - 145px));
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.prepare-left-rail .prepare-compendium-btn {
+  position: static;
+  width: 100%;
+  min-height: 39px;
+  flex: 0 0 auto;
+}
+.prepare-left-rail .unit-info {
+  flex: 0 0 auto;
+}
 .prepare-compendium-btn {
   position: absolute;
   top: 0;
@@ -2962,7 +2984,14 @@ button.danger { background: linear-gradient(135deg, #a45b4d, #743d36); border-co
   .craft-preview .craft-btn { width: 100%; margin-left: 0; }
   :root { --cell: 46px; }
   .side-panel { width: 100%; max-width: 380px; }
-  .prepare-compendium-btn { position: static; display: block; margin: 0 0 8px; }
+  .prepare-left-rail {
+    position: static;
+    width: 100%;
+    max-height: none;
+    margin-bottom: 8px;
+    overflow: visible;
+  }
+  .prepare-compendium-btn { position: static; display: block; margin: 0; }
   /* 狭い画面ではシナジーパネルをコンテンツの下へ回り込ませる */
   .page-flex {
     flex-direction: column;

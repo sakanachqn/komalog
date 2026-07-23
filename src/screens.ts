@@ -1919,9 +1919,11 @@ export function renderPrepare(node: MapNode): HTMLElement {
     boardHolder.innerHTML = "";
     side.innerHTML = "";
 
+    const leftRail = el("div", "prepare-left-rail");
     const compendium = btn("📚 図鑑", "prepare-compendium-btn", () => showCompendium());
     compendium.title = "ユニット・シナジー・アイテム図鑑";
-    boardHolder.appendChild(compendium);
+    leftRail.appendChild(compendium);
+    boardHolder.appendChild(leftRail);
 
     const { wrap } = makeBoard();
 
@@ -2143,7 +2145,7 @@ export function renderPrepare(node: MapNode): HTMLElement {
     side.appendChild(formationCountPanel(run));
     const sel = run.roster.find((o) => o.iid === selected);
     if (sel) {
-      side.appendChild(unitInfoPanel(
+      leftRail.appendChild(unitInfoPanel(
         sel,
         () => {
           sellUnit(run, sel.iid);
@@ -2160,7 +2162,7 @@ export function renderPrepare(node: MapNode): HTMLElement {
       ));
     } else if (selectedEnemy !== null) {
       const sp = ctx.enemyTeam!.spawns[selectedEnemy];
-      if (sp) side.appendChild(enemyInfoPanel(sp.def, ctx.enemyTeam!.scale, em));
+      if (sp) leftRail.appendChild(enemyInfoPanel(sp.def, ctx.enemyTeam!.scale, em));
     }
   }
 
