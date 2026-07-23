@@ -3118,6 +3118,8 @@ export function renderShop(node: MapNode, rescue = false): HTMLElement {
         rerenderAll();
         });
         reroll.dataset.shortcut = "shop-reroll";
+        reroll.classList.add("shop-reroll-button");
+        reroll.appendChild(el("small", "shop-reroll-key", "Rキーでリロール"));
         return reroll;
       })(),
       el("span", "shop-reroll-balance", `💰 所持金 ${run.gold}G`),

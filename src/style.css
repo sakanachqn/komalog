@@ -3208,6 +3208,19 @@ button.danger { background: linear-gradient(135deg, #a45b4d, #743d36); border-co
   border-radius: 9px;
   box-shadow: inset 0 0 0 1px rgba(255, 247, 213, .5);
 }
+.shop-reroll-button {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.shop-reroll-key {
+  color: rgba(255, 248, 222, .72);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1;
+  pointer-events: none;
+}
 
 /* マップの進行候補とルート計画 */
 .map-node.disabled {
