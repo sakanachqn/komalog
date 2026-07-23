@@ -210,7 +210,6 @@ function showSettings(): void {
   body.append(
     volumeRow("SE音量", gameSettings().seVolume, (value) => { updateSettings({ seVolume: value }); sfx.preview(); }),
     volumeRow("BGM音量", gameSettings().bgmVolume, (value) => updateSettings({ bgmVolume: value })),
-    toggleRow("BGM再生", "ゲーム中のBGMをオン／オフする", gameSettings().bgmEnabled, (value) => updateSettings({ bgmEnabled: value })),
     toggleRow("画面揺れ", "クリティカルや大技で盤面を揺らす", gameSettings().screenShake, (value) => updateSettings({ screenShake: value })),
     toggleRow("演出を軽減", "閃光・衝撃波・細かなパーティクルを減らす", gameSettings().reducedEffects, (value) => updateSettings({ reducedEffects: value })),
     toggleRow("血の取引を確認", "最大HPを失う前に確認画面を表示する", gameSettings().confirmBloodTrade, (value) => updateSettings({ confirmBloodTrade: value })),
@@ -1328,7 +1327,9 @@ export function renderTitle(): HTMLElement {
     el("h3", "", "⚙️ 設定"),
     compactVolumeControl("SE", gameSettings().seVolume, (value) => { updateSettings({ seVolume: value }); sfx.preview(); }),
     compactVolumeControl("BGM", gameSettings().bgmVolume, (value) => updateSettings({ bgmVolume: value })),
-    settingToggle("BGM再生", "ゲーム中のBGMをオン／オフ", gameSettings().bgmEnabled, (value) => updateSettings({ bgmEnabled: value })),
+    settingToggle("BGM・SE", "すべての音を一括でオン／オフ", !isMuted(), (enabled) => {
+      if (enabled === isMuted()) toggleMute();
+    }),
     settingToggle("画面揺れ", "クリティカルや大技で盤面を揺らす", gameSettings().screenShake, (value) => updateSettings({ screenShake: value })),
     settingToggle("演出を軽減", "閃光・衝撃波・細かな粒子を減らす", gameSettings().reducedEffects, (value) => updateSettings({ reducedEffects: value })),
     settingToggle("血の取引を確認", "実行前に確認画面を表示", gameSettings().confirmBloodTrade, (value) => updateSettings({ confirmBloodTrade: value })),

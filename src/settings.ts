@@ -1,7 +1,6 @@
 export interface GameSettings {
   seVolume: number;
   bgmVolume: number;
-  bgmEnabled: boolean;
   screenShake: boolean;
   reducedEffects: boolean;
   confirmBloodTrade: boolean;
@@ -11,7 +10,6 @@ const KEY = "komalog-settings-v1";
 const defaults: GameSettings = {
   seVolume: 0.7,
   bgmVolume: 0.32,
-  bgmEnabled: true,
   screenShake: true,
   reducedEffects: false,
   confirmBloodTrade: true,

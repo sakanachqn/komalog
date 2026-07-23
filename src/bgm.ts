@@ -36,7 +36,7 @@ let desiredScene: BgmScene = "title";
 let tracks: Track[] = [];
 
 function syncVolume(track: Track): void {
-  track.audio.muted = isMuted() || !gameSettings().bgmEnabled;
+  track.audio.muted = isMuted();
   track.audio.volume = Math.max(0, Math.min(1, gameSettings().bgmVolume * track.gain * track.loopGain));
 }
 
