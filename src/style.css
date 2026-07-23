@@ -1046,6 +1046,11 @@ button.primary:hover:not(:disabled) {
   transform: translate(-50%, -50%);
   filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.7));
 }
+.item-drag-ghost .art-icon {
+  width: 44px;
+  height: 44px;
+  vertical-align: 0;
+}
 .unit .icon {
   font-size: calc(var(--cell) * 0.5);
   line-height: 1;
@@ -2771,7 +2776,7 @@ button.danger { background: linear-gradient(135deg, #a45b4d, #743d36); border-co
     margin-top: 0;
   }
 }
-/* Generated mini-icon atlases. Emoji text remains in the DOM as an accessibility/failure fallback. */
+/* 画像アイコン。アイテムは絵文字フォールバックを持たず、常に個別画像を表示する。 */
 .art-icon {
   display: inline-block;
   width: 1.35em;
@@ -2787,6 +2792,12 @@ button.danger { background: linear-gradient(135deg, #a45b4d, #743d36); border-co
   background-position: center;
   background-size: cover;
   image-rendering: auto;
+}
+.hover-item-image {
+  width: 28px;
+  height: 28px;
+  margin-right: 3px;
+  vertical-align: middle;
 }
 .unit .icon > .art-icon,
 .bench-slot .icon > .art-icon,

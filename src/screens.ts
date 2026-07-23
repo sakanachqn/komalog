@@ -1688,11 +1688,12 @@ export function renderPrepare(node: MapNode): HTMLElement {
       const startX = e.clientX;
       const startY = e.clientY;
       let ghost: HTMLElement | null = null;
-      const icon = ITEM_BY_ID.get(run.items[itemIdx])!.icon;
+      const draggedItem = ITEM_BY_ID.get(run.items[itemIdx])!;
       const onMove = (ev: PointerEvent) => {
         if (!ghost) {
           if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 6) return;
-          ghost = el("div", "drag-ghost", icon);
+          ghost = el("div", "drag-ghost item-drag-ghost");
+          ghost.appendChild(itemArt(draggedItem));
           document.body.appendChild(ghost);
           elm.classList.add("dragging");
         }

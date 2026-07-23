@@ -2,6 +2,7 @@ import { CRAFT_RECIPES, ITEM_BY_ID, RELIC_BY_ID } from "./data/relics";
 import { ANCIENT_RELIC_BY_ID } from "./data/ancientRelics";
 import { TRAITS, UNIT_BY_ID } from "./data/units";
 import type { EnemyDef, TraitId } from "./types";
+import { itemArtUrl } from "./artIcons";
 
 function rangeLabel(range: number): string {
   const kind = range <= 1 ? "近距離" : range === 2 ? "中距離" : "遠距離";
@@ -45,7 +46,7 @@ function tooltipHtml(target: HTMLElement): string | null {
     const isMaterial = Object.keys(CRAFT_RECIPES).some((key) => key.split("+").includes(item.id));
     const isResult = Object.values(CRAFT_RECIPES).includes(item.id);
     const category = isMaterial && isResult ? "合成素材・合成品" : isMaterial ? "合成素材" : isResult ? "合成アイテム" : "アイテム";
-    return `<b>${item.icon} ${item.name}</b><div class="hover-item-kind">${category}</div><div class="hover-skill"><small>効果</small><p>${item.desc}</p></div>`;
+    return `<b><span class="art-icon art-item hover-item-image" style="background-image:url('${itemArtUrl(item)}')" role="img" aria-label="${item.name}"></span> ${item.name}</b><div class="hover-item-kind">${category}</div><div class="hover-skill"><small>効果</small><p>${item.desc}</p></div>`;
   }
 
   const ancientTarget = target.closest<HTMLElement>("[data-ancient-relic-tooltip]");

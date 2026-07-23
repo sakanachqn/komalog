@@ -23,14 +23,18 @@ export function synergyArt(id: TraitId, className = ""): HTMLSpanElement {
 }
 
 export function itemArt(item: ItemDef, className = ""): HTMLSpanElement {
-  const dataIndex = Math.max(0, ITEMS.findIndex((entry) => entry.id === item.id));
   const span = document.createElement("span");
   span.className = `art-icon art-item${className ? ` ${className}` : ""}`;
-  span.textContent = item.icon;
   span.setAttribute("aria-label", item.name);
-  span.style.backgroundImage = `url("${import.meta.env.BASE_URL}assets/icons/items/${dataIndex + 1}.png?v=${__ICON_BUILD_VERSION__}")`;
+  span.style.backgroundImage = `url("${itemArtUrl(item)}")`;
   span.dataset.itemTooltip = item.id;
   return span;
+}
+
+/** ツールチップなどHTML文字列内でも、通常表示と同じアイテム画像を使う。 */
+export function itemArtUrl(item: ItemDef): string {
+  const dataIndex = Math.max(0, ITEMS.findIndex((entry) => entry.id === item.id));
+  return `${import.meta.env.BASE_URL}assets/icons/items/${dataIndex + 1}.png?v=${__ICON_BUILD_VERSION__}`;
 }
 
 export function replaceWithUnitArt(target: HTMLElement, def: UnitDef): void {
