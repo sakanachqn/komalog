@@ -2808,6 +2808,61 @@ button.danger { background: linear-gradient(135deg, #a45b4d, #743d36); border-co
 .shop-item-strip {
   min-height: 43px;
 }
+.shop-item-section {
+  min-height: 29px;
+  padding: 2px 8px;
+  background: rgba(255, 241, 202, .14);
+  border: 1px solid rgba(144, 99, 48, .28);
+  border-radius: 7px;
+}
+.shop-item-section.equipped {
+  border-left: 2px solid #8c6234;
+}
+.shop-equipped-item {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  cursor: help;
+}
+.shop-equipped-item > .art-icon {
+  width: 25px;
+  height: 25px;
+  vertical-align: 0;
+}
+.shop-equipped-holder {
+  position: absolute;
+  right: -5px;
+  bottom: -4px;
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  font-size: 10px;
+  line-height: 1;
+  background: #f0d69e;
+  border: 1px solid #79502b;
+  border-radius: 50%;
+}
+.shop-mini-traits {
+  position: absolute;
+  left: 50%;
+  bottom: 1px;
+  display: flex;
+  gap: 0;
+  z-index: 3;
+  padding: 1px 2px;
+  color: #fff0c4;
+  font-size: 7px;
+  line-height: 1;
+  pointer-events: none;
+  background: rgba(48, 28, 16, .76);
+  border: 1px solid rgba(235, 201, 130, .42);
+  border-radius: 999px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
 .reward-formation-note {
   margin-top: 7px;
   color: var(--muted);

@@ -210,6 +210,7 @@ function showSettings(): void {
   body.append(
     volumeRow("SE音量", gameSettings().seVolume, (value) => { updateSettings({ seVolume: value }); sfx.preview(); }),
     volumeRow("BGM音量", gameSettings().bgmVolume, (value) => updateSettings({ bgmVolume: value })),
+    toggleRow("BGM再生", "ゲーム中のBGMをオン／オフする", gameSettings().bgmEnabled, (value) => updateSettings({ bgmEnabled: value })),
     toggleRow("画面揺れ", "クリティカルや大技で盤面を揺らす", gameSettings().screenShake, (value) => updateSettings({ screenShake: value })),
     toggleRow("演出を軽減", "閃光・衝撃波・細かなパーティクルを減らす", gameSettings().reducedEffects, (value) => updateSettings({ reducedEffects: value })),
     toggleRow("血の取引を確認", "最大HPを失う前に確認画面を表示する", gameSettings().confirmBloodTrade, (value) => updateSettings({ confirmBloodTrade: value })),
@@ -513,22 +514,45 @@ function rosterStrip(run: RunState): HTMLElement {
   return wrap;
 }
 
-/** ショップ上部用。ミニ盤面と重複するユニット情報を省き、未装備アイテムだけ表示する。 */
+/** ショップ上部用。未装備品と、各ユニットが装備中の品をまとめて表示する。 */
 function shopItemStrip(run: RunState): HTMLElement {
   const wrap = el("div", "roster-strip shop-item-strip");
-  wrap.appendChild(el("span", "rs-label", "所持アイテム"));
-  if (run.items.length === 0) {
-    wrap.appendChild(el("span", "rs-empty", "—"));
-    return wrap;
-  }
+  const stock = el("span", "rs-section shop-item-section");
+  stock.appendChild(el("span", "rs-label", "未装備"));
+  if (run.items.length === 0) stock.appendChild(el("span", "rs-empty", "—"));
   for (const id of run.items) {
     const item = ITEM_BY_ID.get(id);
     if (!item) continue;
     const chip = itemArt(item);
     chip.title = `${item.name}\n${item.desc}`;
-    wrap.appendChild(chip);
+    stock.appendChild(chip);
   }
+
+  const equipped = el("span", "rs-section shop-item-section equipped");
+  equipped.appendChild(el("span", "rs-label", "装備中"));
+  const equippedUnits = run.roster.filter((unit) => unit.item);
+  if (equippedUnits.length === 0) equipped.appendChild(el("span", "rs-empty", "—"));
+  for (const owned of equippedUnits) {
+    const item = ITEM_BY_ID.get(owned.item!);
+    if (!item) continue;
+    const def = unitDef(owned);
+    const chip = el("span", "shop-equipped-item");
+    chip.append(itemArt(item), unitArt(def, "shop-equipped-holder"));
+    chip.title = `${def.name}が装備中\n${item.name}: ${item.desc}`;
+    equipped.appendChild(chip);
+  }
+  wrap.append(stock, equipped);
   return wrap;
+}
+
+function appendShopMiniTraits(piece: HTMLElement, def: UnitDef): void {
+  const traits = el("div", "shop-mini-traits");
+  for (const trait of def.traits) {
+    const icon = synergyArt(trait);
+    icon.title = TRAITS[trait].name;
+    traits.appendChild(icon);
+  }
+  piece.appendChild(traits);
 }
 
 function traitPanel(board: OwnedUnit[]): HTMLElement {
@@ -1304,6 +1328,7 @@ export function renderTitle(): HTMLElement {
     el("h3", "", "⚙️ 設定"),
     compactVolumeControl("SE", gameSettings().seVolume, (value) => { updateSettings({ seVolume: value }); sfx.preview(); }),
     compactVolumeControl("BGM", gameSettings().bgmVolume, (value) => updateSettings({ bgmVolume: value })),
+    settingToggle("BGM再生", "ゲーム中のBGMをオン／オフ", gameSettings().bgmEnabled, (value) => updateSettings({ bgmEnabled: value })),
     settingToggle("画面揺れ", "クリティカルや大技で盤面を揺らす", gameSettings().screenShake, (value) => updateSettings({ screenShake: value })),
     settingToggle("演出を軽減", "閃光・衝撃波・細かな粒子を減らす", gameSettings().reducedEffects, (value) => updateSettings({ reducedEffects: value })),
     settingToggle("血の取引を確認", "実行前に確認画面を表示", gameSettings().confirmBloodTrade, (value) => updateSettings({ confirmBloodTrade: value })),
@@ -2863,18 +2888,21 @@ function buildResult(node: MapNode, win: boolean, hpLost: number): HTMLElement {
   s.appendChild(row);
   s.appendChild(msg);
   const rewardActions = el("div", "toolbar");
+  const skipRewardGold = () => Math.max(...choices.map((choice) => choice.cost)) + 1;
+  const skipButton = btn(`スキップ (+${skipRewardGold()}G)`, "", () => {
+    run.gold += skipRewardGold();
+    go({ kind: "map" });
+  });
   if (rewardRerolls > 0) rewardActions.appendChild(btn("🎲 候補をリロール（1回）", "", () => {
     if (rewardRerolls <= 0) return;
     rewardRerolls--;
     choices = Array.from({ length: rewardChoiceCount }, () => rollUnitDef(gf, maxed));
     renderChoices();
+    skipButton.textContent = `スキップ (+${skipRewardGold()}G)`;
     (rewardActions.firstElementChild as HTMLButtonElement).disabled = true;
     (rewardActions.firstElementChild as HTMLButtonElement).textContent = "🎲 リロール使用済み";
   }));
-  rewardActions.appendChild(btn("スキップ (+2G)", "", () => {
-      run.gold += 2;
-      go({ kind: "map" });
-    }));
+  rewardActions.appendChild(skipButton);
   s.appendChild(rewardActions);
   s.appendChild(battleReport());
   return s;
@@ -3178,7 +3206,7 @@ export function renderShop(node: MapNode, rescue = false): HTMLElement {
           const piece = el("div", "shop-mini-unit");
           piece.dataset.unitTooltip = def.id;
           piece.append(unitArt(def, "shop-mini-unit-art"), el("sup", "", starsText(owned.star)));
-          if (owned.item) piece.appendChild(itemArt(ITEM_BY_ID.get(owned.item)!, "shop-mini-item"));
+          appendShopMiniTraits(piece, def);
           makeDraggable(piece, owned.iid);
           piece.classList.toggle("selected", selectedShopUnit === owned.iid);
           piece.addEventListener("click", () => {
@@ -3209,7 +3237,7 @@ export function renderShop(node: MapNode, rescue = false): HTMLElement {
         const piece = el("div", "shop-mini-unit");
         piece.dataset.unitTooltip = def.id;
         piece.append(unitArt(def, "shop-mini-unit-art"), el("sup", "", starsText(owned.star)));
-        if (owned.item) piece.appendChild(itemArt(ITEM_BY_ID.get(owned.item)!, "shop-mini-item"));
+        appendShopMiniTraits(piece, def);
         makeDraggable(piece, owned.iid);
         piece.classList.toggle("selected", selectedShopUnit === owned.iid);
         piece.addEventListener("click", () => {
