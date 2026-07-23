@@ -2,7 +2,7 @@ import type { MapNode, NodeType } from "./types";
 
 export const FLOOR_COUNT = 11; // 0〜9 通常フロア + 10 ボス
 
-/** スレスパ風の分岐マップを生成する */
+/** 複数の進行先を持つ階層型の分岐マップを生成する */
 export function generateMap(): MapNode[] {
   const nodes: MapNode[] = [];
   let nextId = 0;

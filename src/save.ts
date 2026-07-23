@@ -1,7 +1,30 @@
 import type { RunState } from "./types";
 
-const KEY = "autochess-rogue-save-v1";
-const BACKUP_KEY = "autochess-rogue-save-backup-v1";
+const KEY = "komalog-save-v1";
+const BACKUP_KEY = "komalog-save-backup-v1";
+
+/** 初期版の保存キーを名前に依存せず検出し、現在のキーへ移行する。 */
+function findLegacyKey(backup = false): string | null {
+  const suffix = backup ? "-rogue-save-backup-v1" : "-rogue-save-v1";
+  return Object.keys(localStorage).find((key) => key !== KEY && key !== BACKUP_KEY && key.endsWith(suffix)) ?? null;
+}
+
+function migrateLegacySave(): void {
+  if (!localStorage.getItem(KEY)) {
+    const legacy = findLegacyKey();
+    if (legacy) {
+      const raw = localStorage.getItem(legacy);
+      if (raw && parseSave(raw)) localStorage.setItem(KEY, raw);
+    }
+  }
+  if (!localStorage.getItem(BACKUP_KEY)) {
+    const legacyBackup = findLegacyKey(true);
+    if (legacyBackup) {
+      const raw = localStorage.getItem(legacyBackup);
+      if (raw && parseSave(raw)) localStorage.setItem(BACKUP_KEY, raw);
+    }
+  }
+}
 
 export interface ResumeInfo {
   kind: "map" | "prepare" | "shop" | "rest" | "event" | "actclear";
@@ -30,6 +53,7 @@ export function saveGame(data: SaveData) {
 
 export function loadGame(): SaveData | null {
   try {
+    migrateLegacySave();
     const primary = localStorage.getItem(KEY);
     const backup = localStorage.getItem(BACKUP_KEY);
     const d = (primary ? parseSave(primary) : null) ?? (backup ? parseSave(backup) : null);
@@ -69,8 +93,12 @@ function parseSave(raw: string): SaveData | null {
 
 export function clearSave() {
   try {
+    const legacy = findLegacyKey();
+    const legacyBackup = findLegacyKey(true);
     localStorage.removeItem(KEY);
     localStorage.removeItem(BACKUP_KEY);
+    if (legacy) localStorage.removeItem(legacy);
+    if (legacyBackup) localStorage.removeItem(legacyBackup);
   } catch {
     /* noop */
   }
