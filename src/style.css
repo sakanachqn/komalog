@@ -1991,6 +1991,17 @@ button.primary:hover:not(:disabled) {
   flex-wrap: wrap;
   justify-content: center;
 }
+.reward-unit-row,
+.shop-unit-row {
+  width: max-content;
+  max-width: none;
+  flex-wrap: nowrap;
+  align-self: center;
+}
+.reward-unit-row .unit-card {
+  width: 180px;
+  padding: 13px;
+}
 .unit-card {
   width: 195px;
   background: var(--panel);
@@ -3002,6 +3013,14 @@ button.danger { background: linear-gradient(135deg, #a45b4d, #743d36); border-co
     max-width: 380px;
     position: static;
     margin-top: 0;
+  }
+  .reward-unit-row,
+  .shop-unit-row {
+    width: 100%;
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding: 4px;
+    box-sizing: border-box;
   }
 }
 /* 画像アイコン。アイテムは絵文字フォールバックを持たず、常に個別画像を表示する。 */

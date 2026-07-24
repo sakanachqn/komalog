@@ -30,11 +30,11 @@ import {
   autoPlace,
   benchUnits,
   boardUnits,
-  globalFloor,
   maxedDefIds,
   newRun,
   sellUnit,
   teamCap,
+  unitOfferFloor,
   unitDef,
 } from "./state";
 import { generateMap } from "./map";
@@ -2851,12 +2851,12 @@ function buildResult(node: MapNode, win: boolean, hpLost: number): HTMLElement {
 
   s.appendChild(el("div", "sub", `💰 ${goldReward(node)}G を獲得！ 仲間を1体選ぼう：`));
   s.appendChild(rosterStrip(run));
-  const gf = globalFloor(run);
+  const gf = unitOfferFloor(run);
   const maxed = maxedDefIds(run);
   const rewardChoiceCount = 3 + legacyLevel("reward_choice");
   let choices: UnitDef[] = Array.from({ length: rewardChoiceCount }, () => rollUnitDef(gf, maxed));
   let rewardRerolls = hasLegacy("reward_reroll") ? 1 : 0;
-  const row = el("div", "card-row");
+  const row = el("div", "card-row reward-unit-row");
   const msg = el("div", "sub", "");
   const renderChoices = () => {
     row.innerHTML = "";
@@ -2975,14 +2975,14 @@ export function renderShop(node: MapNode, rescue = false): HTMLElement {
   let relicOffer: string | null =
     relicGuaranteed || Math.random() < 0.35 ? (rollRelicChoices(run.relics, 1)[0]?.id ?? null) : null;
   if (relicOffer) discoverRelics([relicOffer]);
-  const row = el("div", "card-row compact");
+  const row = el("div", "card-row compact shop-unit-row");
   const goodsRow = el("div", "card-row");
   const bar = el("div", "toolbar");
 
   function rollOffers(): (UnitDef | null)[] {
     const maxed = maxedDefIds(run);
     const offerCount = hasLegacy("shop_extra_offer") ? 6 : 5;
-    return Array.from({ length: offerCount }, () => rollUnitDef(globalFloor(run), maxed));
+    return Array.from({ length: offerCount }, () => rollUnitDef(unitOfferFloor(run), maxed));
   }
 
   function refresh() {
@@ -3430,7 +3430,7 @@ const EVENTS: GameEvent[] = [
             return;
           }
           // 通常ショップより格上（通算フロア+4）のユニットを3体提示し、選んで雇える
-          const gf = globalFloor(run) + 4;
+          const gf = unitOfferFloor(run) + 4;
           const maxed = maxedDefIds(run);
           const cands = [rollUnitDef(gf, maxed), rollUnitDef(gf, maxed), rollUnitDef(gf, maxed)];
           center.innerHTML = "";

@@ -2,7 +2,7 @@ import { ascMods } from "./ascension";
 import { rollActRule } from "./data/actrules";
 import { rollItem, rollRelicChoices } from "./data/relics";
 import { UNIT_BY_ID } from "./data/units";
-import { generateMap } from "./map";
+import { FLOOR_COUNT, generateMap } from "./map";
 import { grantUnlock, hasAchievementMilestone, hasLegacy, legacyLevel, meta, saveMeta } from "./meta";
 import type { OwnedUnit, RunState, UnitDef } from "./types";
 
@@ -66,6 +66,11 @@ export function newRun(starterDefIds: string[], asc = 0): RunState {
 /** 幕をまたいだ通算フロア（難易度・出現率の基準） */
 export function globalFloor(run: RunState): number {
   return (run.act - 1) * 10 + run.floorIndex;
+}
+
+/** ユニット提供率専用の通算フロア。各幕11フロアを重複なく数える。 */
+export function unitOfferFloor(run: RunState): number {
+  return (run.act - 1) * FLOOR_COUNT + run.floorIndex;
 }
 
 /** 盤面に同時に出せる最大数（進行で増える + 王の勲章 + 英雄の器） */

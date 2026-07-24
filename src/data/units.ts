@@ -920,12 +920,15 @@ export const UNIT_BY_ID = new Map(UNITS.map((u) => [u.id, u]));
 export function rollUnitDef(floor: number, exclude?: Set<string>): UnitDef {
   // コスト1〜5の出現率。進行するほど高コストが出やすくなる
   let weights: [number, number, number, number, number];
-  if (floor < 3) weights = [72, 25, 3, 0, 0];
-  else if (floor < 6) weights = [48, 36, 14, 2, 0];
-  else if (floor < 11) weights = [28, 38, 25, 8, 1];
-  else if (floor < 16) weights = [15, 33, 32, 16, 4];
-  else if (floor < 22) weights = [8, 25, 34, 23, 10];
-  else weights = [4, 16, 32, 30, 18];
+  if (floor < 3) weights = [74, 24, 2, 0, 0];
+  else if (floor < 6) weights = [52, 35, 12, 1, 0];
+  else if (floor < 11) weights = [35, 39, 21, 4.2, 0.8];
+  else if (floor < 14) weights = [27, 38, 27, 7, 1];
+  else if (floor < 17) weights = [21, 35, 31, 11, 2];
+  else if (floor < 22) weights = [15, 31, 34, 16, 4];
+  else if (floor < 25) weights = [12, 29, 35, 19, 5];
+  else if (floor < 28) weights = [9, 25, 36, 23, 7];
+  else weights = [6, 20, 34, 30, 10];
   const r = Math.random() * 100;
   let acc = 0;
   let cost: 1 | 2 | 3 | 4 | 5 = 5;
